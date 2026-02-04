@@ -18,9 +18,10 @@ jobs:
       - name: Set up JDK Latest
         uses: actions/setup-java@v4
         with:
-          java-version: "latest"
+          java-version: "17"
           distribution: "temurin"
           cache: gradle
+          check-latest: true
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
