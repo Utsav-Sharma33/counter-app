@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.CounterApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorSecondary">@color/accent</item>
+        <item name="colorSecondaryVariant">@color/accent</item>
+        <item name="colorError">@color/error</item>
+        <item name="android:textColor">@color/black</item>
+    </style>
+</resources>

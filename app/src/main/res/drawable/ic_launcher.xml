@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <!-- Background circle -->
+    <path
+        android:fillColor="#FF6366F1"
+        android:pathData="M96,24C56.24,24 24,56.24 24,96s32.24,72 72,72 72,-32.24 72,-72 -32.24,-72 -72,-72zM96,160C65.07,160 40,134.93 40,104s25.07,-56 56,-56 56,25.07 56,56 -25.07,56 -56,56z" />
+    <!-- Plus symbol -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M96,68v56h28v16h-28v28h-16v-28H52v-16h28V68z" />
+</vector>
