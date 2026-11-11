@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import androidx.room.RoomDatabase
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import android.database.sqlite.SQLiteConstraintException
