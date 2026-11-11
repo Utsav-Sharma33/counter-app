@@ -1,5 +1,6 @@
 package com.example.counter.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -15,5 +16,6 @@ data class CounterEntity(
     val count: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "''")
     val normalizedName: String = CounterNameNormalizer.normalize(name)
 )
