@@ -27,4 +27,12 @@
     <string name="counter_notification_decrement">Decrease counter</string>
     <string name="counter_tracking_enable">Track in notification</string>
     <string name="counter_tracking_disable">Stop notification tracking</string>
+    <string name="delete_all_counters">Delete all counters</string>
+    <string name="delete_all_confirmation">This permanently deletes every counter and its notification. Continue?</string>
+    <string name="rename_counter">Rename counter</string>
+    <string name="delete_counter">Delete counter</string>
+    <string name="counter_details">Counter details</string>
+    <string name="reset_counter">Reset counter</string>
+    <string name="reset_counter_confirmation">Reset %1$s to zero?</string>
+    <string name="delete_counter_confirmation_named">Delete %1$s? This cannot be undone.</string>
 </resources>

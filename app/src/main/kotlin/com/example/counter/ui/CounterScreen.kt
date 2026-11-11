@@ -12,49 +12,52 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.counter.R
 import com.example.counter.data.CounterEntity
 
@@ -63,35 +66,42 @@ fun CounterApp(
     viewModel: CounterViewModel,
     onRequestTrackingPermission: (Int) -> Unit
 ) {
-    val counters by viewModel.counters.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val selectedCounterId by viewModel.selectedCounterId.collectAsState()
-    val trackedCounterIds by viewModel.trackedCounterIds.collectAsState()
-    
-    var showCreateDialog by remember { mutableStateOf(false) }
-    
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showCreateDialog by rememberSaveable { mutableStateOf(false) }
+    var showDeleteAllDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(state.errorMessage) {
+        val message = state.errorMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearError()
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        "Counter App",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text(stringResource(R.string.app_name)) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
-                    if (counters.isNotEmpty()) {
+                    if (state.counters.isNotEmpty()) {
+                        IconButton(
+                            onClick = { showDeleteAllDialog = true },
+                            enabled = !state.isDeletingAll
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.delete_all_counters)
+                            )
+                        }
                         IconButton(onClick = { showCreateDialog = true }) {
                             Icon(
                                 Icons.Filled.Add,
-                                contentDescription = "Add Counter",
-                                tint = Color.White
+                                contentDescription = stringResource(R.string.create_counter)
                             )
                         }
                     }
@@ -99,114 +109,99 @@ fun CounterApp(
             )
         },
         floatingActionButton = {
-            if (counters.isEmpty()) {
-                FloatingActionButton(
-                    onClick = { showCreateDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add Counter", tint = Color.White)
+            if (state.counters.isEmpty() && !state.isInitialLoading) {
+                FloatingActionButton(onClick = { showCreateDialog = true }) {
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.create_counter)
+                    )
                 }
             }
         }
-    ) { paddingValues ->
+    ) { padding ->
         when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Loading counters...")
+            state.isInitialLoading -> Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+            state.counters.isEmpty() -> EmptyStateScreen(
+                modifier = Modifier.padding(padding),
+                onAddClick = { showCreateDialog = true }
+            )
+            else -> CounterListScreen(
+                counters = state.counters,
+                selectedCounterId = state.selectedCounterId,
+                trackedCounterIds = state.trackedCounterIds,
+                busyCounterIds = state.busyCounterIds,
+                modifier = Modifier.padding(padding),
+                onCounterClick = { viewModel.selectCounter(it.id) },
+                onIncrement = viewModel::incrementCounter,
+                onDecrement = viewModel::decrementCounter,
+                onReset = viewModel::resetCounter,
+                onRename = viewModel::renameCounter,
+                onDelete = viewModel::deleteCounter,
+                onTrackingToggle = { id, enabled ->
+                    if (enabled) onRequestTrackingPermission(id)
+                    else viewModel.setTrackingEnabled(id, false)
                 }
-            }
-            counters.isEmpty() -> {
-                EmptyStateScreen(
-                    modifier = Modifier.padding(paddingValues),
-                    onAddClick = { showCreateDialog = true }
-                )
-            }
-            else -> {
-                CounterListScreen(
-                    counters = counters,
-                    selectedCounterId = selectedCounterId,
-                    trackedCounterIds = trackedCounterIds,
-                    modifier = Modifier.padding(paddingValues),
-                    onCounterClick = { viewModel.selectCounter(it.id) },
-                    onAddClick = { showCreateDialog = true },
-                    onTrackingToggle = { id, isTracked ->
-                        if (isTracked) viewModel.setTrackingEnabled(id, false)
-                        else onRequestTrackingPermission(id)
-                    },
-                    viewModel = viewModel
-                )
-            }
+            )
         }
     }
-    
+
     if (showCreateDialog) {
         CreateCounterDialog(
+            isCreating = state.isCreating,
             onDismiss = { showCreateDialog = false },
             onCreate = { name ->
                 viewModel.createCounter(name)
                 showCreateDialog = false
-            },
-            errorMessage = errorMessage,
-            onErrorDismiss = { viewModel.clearError() }
+            }
         )
     }
-    
-    // Show error snackbar
-    if (errorMessage != null && errorMessage != "") {
-        ErrorSnackbar(message = errorMessage!!, onDismiss = { viewModel.clearError() })
+
+    if (showDeleteAllDialog) {
+        ConfirmActionDialog(
+            title = stringResource(R.string.delete_all_counters),
+            message = stringResource(R.string.delete_all_confirmation),
+            confirmLabel = stringResource(R.string.delete),
+            destructive = true,
+            onDismiss = { showDeleteAllDialog = false },
+            onConfirm = {
+                viewModel.deleteAllCounters()
+                showDeleteAllDialog = false
+            }
+        )
     }
 }
 
 @Composable
 fun EmptyStateScreen(modifier: Modifier = Modifier, onAddClick: () -> Unit) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier = modifier.fillMaxSize().padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 Icons.Filled.Add,
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
             Text(
-                "No Counters Yet",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center
+                stringResource(R.string.no_counters),
+                style = MaterialTheme.typography.headlineSmall
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                "Create your first counter to get started",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center
+                stringResource(R.string.create_first_counter),
+                style = MaterialTheme.typography.bodyLarge
             )
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(
-                onClick = onAddClick,
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Create Counter", fontSize = 16.sp, color = Color.White)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onAddClick) {
+                Text(stringResource(R.string.create_counter))
             }
         }
     }
@@ -217,17 +212,18 @@ fun CounterListScreen(
     counters: List<CounterEntity>,
     selectedCounterId: Int?,
     trackedCounterIds: Set<Int>,
+    busyCounterIds: Set<Int>,
     modifier: Modifier = Modifier,
     onCounterClick: (CounterEntity) -> Unit,
-    onAddClick: () -> Unit,
-    onTrackingToggle: (Int, Boolean) -> Unit,
-    viewModel: CounterViewModel
+    onIncrement: (Int) -> Unit,
+    onDecrement: (Int) -> Unit,
+    onReset: (Int) -> Unit,
+    onRename: (Int, String) -> Unit,
+    onDelete: (Int) -> Unit,
+    onTrackingToggle: (Int, Boolean) -> Unit
 ) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(8.dp),
+        modifier = modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(counters, key = CounterEntity::id) { counter ->
@@ -235,17 +231,15 @@ fun CounterListScreen(
                 counter = counter,
                 isSelected = selectedCounterId == counter.id,
                 isTracked = counter.id in trackedCounterIds,
+                isBusy = counter.id in busyCounterIds,
                 onClick = { onCounterClick(counter) },
-                onIncrementClick = { viewModel.incrementCounter(counter.id) },
-                onDecrementClick = { viewModel.decrementCounter(counter.id) },
-                onDeleteClick = { viewModel.deleteCounter(counter) },
-                onResetClick = { viewModel.resetCounter(counter.id) },
-                onTrackingToggle = { onTrackingToggle(counter.id, counter.id in trackedCounterIds) },
-                viewModel = viewModel
+                onIncrement = { onIncrement(counter.id) },
+                onDecrement = { onDecrement(counter.id) },
+                onReset = { onReset(counter.id) },
+                onRename = { onRename(counter.id, it) },
+                onDelete = { onDelete(counter.id) },
+                onTrackingToggle = { onTrackingToggle(counter.id, counter.id !in trackedCounterIds) }
             )
-        }
-        item {
-            Spacer(modifier = Modifier.height(80.dp))
         }
     }
 }
@@ -255,96 +249,86 @@ fun CounterCard(
     counter: CounterEntity,
     isSelected: Boolean,
     isTracked: Boolean,
+    isBusy: Boolean,
     onClick: () -> Unit,
-    onIncrementClick: () -> Unit,
-    onDecrementClick: () -> Unit,
-    onDeleteClick: () -> Unit,
-    onResetClick: () -> Unit,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    onReset: () -> Unit,
+    onRename: (String) -> Unit,
+    onDelete: () -> Unit,
     onTrackingToggle: () -> Unit,
-    viewModel: CounterViewModel,
     modifier: Modifier = Modifier
 ) {
-    var showDetails by remember { mutableStateOf(false) }
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    
+    var showDetails by rememberSaveable(counter.id) { mutableStateOf(false) }
+    var showRenameDialog by rememberSaveable(counter.id) { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable(counter.id) { mutableStateOf(false) }
+    var showResetDialog by rememberSaveable(counter.id) { mutableStateOf(false) }
+
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isSelected) { onClick() },
+        modifier = modifier.fillMaxWidth().clickable(enabled = !isSelected) { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(16.dp)
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header with title and action buttons
+        Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = counter.name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f)
                 )
-                
-                IconButton(onClick = { showRenameDialog = true }) {
+                IconButton(
+                    onClick = { showRenameDialog = true },
+                    enabled = !isBusy
+                ) {
                     Icon(
                         Icons.Filled.Edit,
-                        contentDescription = "Rename",
-                        tint = MaterialTheme.colorScheme.primary
+                        contentDescription = stringResource(R.string.rename_counter)
                     )
                 }
-                
-                IconButton(onClick = { showDeleteConfirm = true }) {
+                IconButton(
+                    onClick = { showDeleteDialog = true },
+                    enabled = !isBusy
+                ) {
                     Icon(
                         Icons.Filled.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error
+                        contentDescription = stringResource(R.string.delete_counter)
                     )
                 }
-                
                 IconButton(onClick = { showDetails = !showDetails }) {
                     Icon(
                         Icons.Filled.Info,
-                        contentDescription = "Details",
-                        tint = MaterialTheme.colorScheme.secondary
+                        contentDescription = stringResource(R.string.counter_details)
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Counter display
+
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
                     .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        RoundedCornerShape(12.dp)
                     )
-                    .padding(24.dp),
+                    .padding(vertical = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = counter.count.toString(),
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            
-            TextButton(onClick = onTrackingToggle, modifier = Modifier.fillMaxWidth()) {
+
+            TextButton(
+                onClick = onTrackingToggle,
+                enabled = !isBusy,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
                     stringResource(
                         if (isTracked) R.string.counter_tracking_disable
@@ -353,113 +337,115 @@ fun CounterCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Control buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = onDecrementClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp),
+                    onClick = onDecrement,
+                    enabled = !isBusy && counter.count > 0,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+                    )
                 ) {
-                    Text("−", fontSize = 20.sp, color = Color.White)
+                    Icon(
+                        Icons.Filled.Remove,
+                        contentDescription = stringResource(R.string.decrement)
+                    )
                 }
-                
                 Button(
-                    onClick = onResetClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+                    onClick = { showResetDialog = true },
+                    enabled = !isBusy && counter.count != 0,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
-                    Text("Reset", fontSize = 14.sp, color = Color.White)
+                    Text(stringResource(R.string.reset))
                 }
-                
                 Button(
-                    onClick = onIncrementClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+                    onClick = onIncrement,
+                    enabled = !isBusy && counter.count < Int.MAX_VALUE,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
-                    Text("+", fontSize = 20.sp, color = Color.White)
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.increment)
+                    )
                 }
             }
-            
-            // Details section
+
+            if (isBusy) {
+                LinearProgressIndicatorCompat()
+            }
+
             if (showDetails) {
-                Spacer(modifier = Modifier.height(12.dp))
-                DetailsSection(counter = counter)
+                Spacer(Modifier.height(12.dp))
+                DetailsSection(counter)
             }
         }
     }
-    
+
     if (showRenameDialog) {
         RenameCounterDialog(
             currentName = counter.name,
             onDismiss = { showRenameDialog = false },
-            onRename = { newName ->
-                viewModel.renameCounter(counter.id, newName)
+            onRename = {
+                onRename(it)
                 showRenameDialog = false
             }
         )
     }
-    
-    if (showDeleteConfirm) {
-        DeleteConfirmDialog(
-            counterName = counter.name,
-            onDismiss = { showDeleteConfirm = false },
+
+    if (showDeleteDialog) {
+        ConfirmActionDialog(
+            title = stringResource(R.string.delete_counter),
+            message = stringResource(R.string.delete_counter_confirmation_named, counter.name),
+            confirmLabel = stringResource(R.string.delete),
+            destructive = true,
+            onDismiss = { showDeleteDialog = false },
             onConfirm = {
-                onDeleteClick()
-                showDeleteConfirm = false
+                onDelete()
+                showDeleteDialog = false
+            }
+        )
+    }
+
+    if (showResetDialog) {
+        ConfirmActionDialog(
+            title = stringResource(R.string.reset_counter),
+            message = stringResource(R.string.reset_counter_confirmation, counter.name),
+            confirmLabel = stringResource(R.string.reset),
+            destructive = true,
+            onDismiss = { showResetDialog = false },
+            onConfirm = {
+                onReset()
+                showResetDialog = false
             }
         )
     }
 }
 
 @Composable
+private fun LinearProgressIndicatorCompat() {
+    androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+}
+
+@Composable
 fun DetailsSection(counter: CounterEntity, modifier: Modifier = Modifier) {
-    val createdDate = android.text.format.DateFormat.format(
-        "MMM dd, yyyy HH:mm",
-        counter.createdAt
-    )
-    val updatedDate = android.text.format.DateFormat.format(
-        "MMM dd, yyyy HH:mm",
-        counter.updatedAt
-    )
-    
     Column(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
             .background(
-                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(8.dp)
+                MaterialTheme.colorScheme.secondaryContainer,
+                RoundedCornerShape(8.dp)
             )
-            .padding(12.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            text = "Details",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.secondary
+        Text(stringResource(R.string.details), style = MaterialTheme.typography.titleSmall)
+        DetailRow(
+            stringResource(R.string.created),
+            android.text.format.DateFormat.format("MMM dd, yyyy HH:mm", counter.createdAt).toString()
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        DetailRow(label = "Created:", value = createdDate.toString())
-        DetailRow(label = "Updated:", value = updatedDate.toString())
+        DetailRow(
+            stringResource(R.string.updated),
+            android.text.format.DateFormat.format("MMM dd, yyyy HH:mm", counter.updatedAt).toString()
+        )
     }
 }
 
@@ -469,95 +455,45 @@ fun DetailRow(label: String, value: String) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        Text(
-            text = value,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Text(value, style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
 fun CreateCounterDialog(
+    isCreating: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (String) -> Unit,
-    errorMessage: String?,
-    onErrorDismiss: () -> Unit
+    onCreate: (String) -> Unit
 ) {
-    var counterName by remember { mutableStateOf("") }
-    
+    var counterName by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("Create New Counter", fontWeight = FontWeight.Bold)
-        },
+        title = { Text(stringResource(R.string.create_counter)) },
         text = {
-            Column {
-                TextField(
-                    value = counterName,
-                    onValueChange = { counterName = it.take(50) }, // Limit to 50 chars
-                    label = { Text("Counter Name") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = TextFieldDefaults.colors(),
-                    maxLines = 1,
-                    singleLine = true
+            TextField(
+                value = counterName,
+                onValueChange = { counterName = it.take(50) },
+                label = { Text(stringResource(R.string.counter_name)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (counterName.isNotBlank() && !isCreating) onCreate(counterName) }
                 )
-                
-                if (!errorMessage.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = errorMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = onErrorDismiss,
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "Dismiss error",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            )
         },
         confirmButton = {
             Button(
-                onClick = {
-                    if (counterName.trim().isNotEmpty()) {
-                        onCreate(counterName)
-                    }
-                }
+                onClick = { onCreate(counterName) },
+                enabled = counterName.isNotBlank() && !isCreating
             ) {
-                Text("Create")
+                if (isCreating) CircularProgressIndicator(Modifier.size(18.dp))
+                else Text(stringResource(R.string.create_counter))
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
+            TextButton(onClick = onDismiss, enabled = !isCreating) {
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -569,113 +505,62 @@ fun RenameCounterDialog(
     onDismiss: () -> Unit,
     onRename: (String) -> Unit
 ) {
-    var newName by remember { mutableStateOf(currentName) }
-    
+    var newName by rememberSaveable(currentName) { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("Rename Counter", fontWeight = FontWeight.Bold)
-        },
+        title = { Text(stringResource(R.string.rename_counter)) },
         text = {
             TextField(
                 value = newName,
                 onValueChange = { newName = it.take(50) },
-                label = { Text("New Name") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = TextFieldDefaults.colors(),
-                maxLines = 1,
-                singleLine = true
+                label = { Text(stringResource(R.string.new_name)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (newName.isNotBlank()) onRename(newName) }
+                )
             )
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (newName.trim().isNotEmpty()) {
-                        onRename(newName)
-                    }
-                }
-            ) {
-                Text("Rename")
+            Button(onClick = { onRename(newName) }, enabled = newName.isNotBlank()) {
+                Text(stringResource(R.string.rename))
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
             }
         }
     )
 }
 
 @Composable
-fun DeleteConfirmDialog(
-    counterName: String,
+fun ConfirmActionDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    destructive: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("Delete Counter", fontWeight = FontWeight.Bold)
-        },
-        text = {
-            Text("Are you sure you want to delete the counter \"$counterName\"? This action cannot be undone.")
-        },
+        title = { Text(title) },
+        text = { Text(message) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
+                colors = if (destructive) ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error
-                )
+                ) else ButtonDefaults.buttonColors()
             ) {
-                Text("Delete", color = Color.White)
+                Text(confirmLabel)
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
             }
         }
     )
-}
-
-@Composable
-fun ErrorSnackbar(message: String, onDismiss: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            color = MaterialTheme.colorScheme.error,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = message,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Dismiss",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-    }
 }
