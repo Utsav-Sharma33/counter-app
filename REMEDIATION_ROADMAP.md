@@ -12,11 +12,11 @@ Track the code, reliability, build, testing, security, and release-readiness wor
 
 ## Audit summary
 
-The repository is a Kotlin Android application using Jetpack Compose, Room, coroutines, and notification actions. The current source tree has no test source files and no Gradle wrapper scripts or wrapper directory. The current main branch is the baseline above.
+The repository is a Kotlin Android application using Jetpack Compose, Room, coroutines, and notification actions. The source tree has no test source files or checked-in Gradle wrapper files. The project uses a CI-generated wrapper approach; the workflow must install a pinned Gradle distribution and generate the wrapper before invoking it.
 
 ### Confirmed findings from source inspection
 
-1. **Build reproducibility:** `gradlew`, `gradlew.bat`, and `gradle/wrapper/` are absent from the repository tree, while the GitHub Actions workflow invokes `./gradlew`.
+1. **CI Gradle bootstrap:** The absence of `gradlew`, `gradlew.bat`, and `gradle/wrapper/` from the repository is intentional under the CI-generated-wrapper approach. However, the workflow invoked `./gradlew` without first installing Gradle and generating those files. Historical Actions run #4 confirms failure at `chmod +x ./gradlew`.
 2. **Compose compiler configuration:** Kotlin is configured at 2.0.0, while the app configures `kotlinCompilerExtensionVersion = "2.0.0"`. The project should use the Kotlin 2.x Compose compiler Gradle plugin consistently rather than retaining the legacy compiler-extension configuration.
 3. **Database data-loss risk:** Room uses `fallbackToDestructiveMigration()` with database version 1 and no migrations.
 4. **Counter concurrency:** decrement is implemented as a read followed by a separate update. The database should enforce the non-negative invariant atomically. Increment also needs an explicit overflow policy.
@@ -45,18 +45,19 @@ The repository is a Kotlin Android application using Jetpack Compose, Room, coro
 
 ### Phase 1 — Build and project foundation
 
-#### 1.1 Restore Gradle wrapper
-**Files:** `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`, `.github/workflows/build.yml`
+#### 1.1 Bootstrap the Gradle wrapper in CI
+**Files:** `.github/workflows/build.yml` (generated wrapper files remain in the runner workspace)
 
 Tasks:
-- Generate and commit a Gradle wrapper compatible with the selected Android Gradle Plugin.
-- Pin the Gradle distribution version in wrapper properties.
-- Ensure the wrapper scripts are executable where applicable.
-- Keep CI commands using the checked-in wrapper.
+- Install a pinned Gradle distribution using the Gradle setup action.
+- Generate the wrapper during the workflow before any `./gradlew` command.
+- Pin the wrapper distribution to Gradle 8.4, which is the required baseline for the current Android Gradle Plugin 8.3.0 configuration.
+- Keep lint, test, and APK build commands using the generated wrapper.
+- Do not require generated wrapper files to be committed to the repository unless the project later changes its wrapper policy.
 
 Acceptance:
-- Wrapper files exist and use a Gradle version compatible with AGP.
-- CI references only the wrapper.
+- CI installs Gradle 8.4 and generates `gradlew` plus `gradle/wrapper/` before attempting to execute them.
+- The generated wrapper uses the pinned distribution.
 - A clean build is verified in an available local build environment before marking complete.
 
 #### 1.2 Align Kotlin and Compose compiler
@@ -307,7 +308,7 @@ Acceptance:
 
 | File or path | Work required | Priority | Status |
 |---|---|---:|---|
-| `gradlew`, `gradlew.bat`, `gradle/wrapper/*` | Restore and pin wrapper | P0 | [ ] |
+| `.github/workflows/build.yml` | Install pinned Gradle and generate wrapper before use | P0 | [ ] |
 | `build.gradle.kts` | Align Kotlin/Compose plugin versions | P0 | [ ] |
 | `app/build.gradle.kts` | Compose plugin, dependencies, tests, signing | P0/P2 | [ ] |
 | `settings.gradle.kts` | Verify plugin and dependency repositories | P2 | [ ] |
@@ -333,7 +334,7 @@ Acceptance:
 
 ## Suggested commit sequence
 
-1. `build: restore Gradle wrapper and align Compose compiler`
+1. `build: bootstrap pinned Gradle in CI and align Compose compiler`
 2. `fix: correct Android backup and data extraction rules`
 3. `fix(database): add safe migrations and atomic counter updates`
 4. `fix(domain): centralize counter validation and uniqueness`

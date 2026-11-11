@@ -3,6 +3,4 @@
     <include domain="database" path="counter_database" />
     <include domain="sharedpref" path="." />
     <include domain="file" path="." />
-    <exclude domain="cache" path="." />
-    <exclude domain="file" path="nomedia" />
 </full-backup-content>
