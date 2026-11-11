@@ -8,20 +8,39 @@ plugins {
     id("jacoco")
 }
 
+val releaseStoreFile = providers.environmentVariable("COUNTER_RELEASE_STORE_FILE").orNull
+val releaseStorePassword = providers.environmentVariable("COUNTER_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("COUNTER_RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("COUNTER_RELEASE_KEY_PASSWORD").orNull
+val releaseSigningConfigured = listOf(
+    releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.counter"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.counter"
         minSdk = 28
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 36
+        versionCode = providers.gradleProperty("APP_VERSION_CODE").orNull?.toIntOrNull() ?: 1
+        versionName = providers.gradleProperty("APP_VERSION_NAME").orNull ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
         }
     }
 
@@ -31,6 +50,9 @@ android {
             enableAndroidTestCoverage = true
         }
         release {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             shrinkResources = true
             proguardFiles(
@@ -59,7 +81,6 @@ android {
         }
     }
 }
-
 
 jacoco {
     toolVersion = "0.8.12"
@@ -115,13 +136,11 @@ kapt {
 }
 
 dependencies {
-    // Core Android
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
 
-    // Compose
     val composeBom = platform("androidx.compose:compose-bom:2024.12.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
@@ -130,34 +149,17 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.3.0")
     implementation("androidx.compose.material:material-icons-extended:1.7.0")
 
-    // ViewModel and LiveData
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.6")
 
-    // Room Database
     val roomVersion = "2.7.0"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     kapt("androidx.room:room-compiler:$roomVersion")
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
 
-    // Datastore
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.1")
 
-    // Notification
-    implementation("androidx.core:core:1.13.1")
-
-    // Dependency Injection (optional but recommended)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
-
-    // Logging (for better debugging)
-    implementation("com.jakewharton.timber:timber:5.1.0")
-
-    // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.1")
     androidTestImplementation("androidx.test:core:1.6.1")
