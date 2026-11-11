@@ -8,11 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 class CounterRepository(private val counterDao: CounterDao) : CounterDataSource {
 
-    fun getAllCounters(): Flow<List<CounterEntity>> = counterDao.getAllCounters()
+    override fun getAllCounters(): Flow<List<CounterEntity>> = counterDao.getAllCounters()
 
     fun getCounterById(id: Int): Flow<CounterEntity?> = counterDao.getCounterByIdFlow(id)
 
-    suspend fun createCounter(name: String): CounterResult<Long> {
+    override suspend fun createCounter(name: String): CounterResult<Long> {
         CounterNamePolicy.validate(name)?.let { return CounterResult.Failure(it) }
         val trimmedName = name.trim()
         val normalizedName = CounterNamePolicy.normalize(trimmedName)
@@ -41,7 +41,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
     suspend fun deleteCounter(counter: CounterEntity): CounterResult<Unit> =
         deleteCounter(counter.id)
 
-    suspend fun deleteCounter(id: Int): CounterResult<Unit> = storageResult {
+    override suspend fun deleteCounter(id: Int): CounterResult<Unit> = storageResult {
         if (counterDao.deleteCounterById(id) == 0) {
             CounterResult.Failure(CounterFailure.COUNTER_NOT_FOUND)
         } else {
@@ -49,7 +49,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun incrementCounter(id: Int): CounterResult<Unit> = storageResult {
+    override suspend fun incrementCounter(id: Int): CounterResult<Unit> = storageResult {
         if (counterDao.incrementCounter(id) == 1) {
             CounterResult.Success(Unit)
         } else {
@@ -63,7 +63,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun decrementCounter(id: Int): CounterResult<Unit> = storageResult {
+    override suspend fun decrementCounter(id: Int): CounterResult<Unit> = storageResult {
         if (counterDao.decrementCounter(id) == 1) {
             CounterResult.Success(Unit)
         } else {
@@ -77,7 +77,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun resetCounter(id: Int): CounterResult<Unit> = storageResult {
+    override suspend fun resetCounter(id: Int): CounterResult<Unit> = storageResult {
         if (counterDao.resetCounter(id) == 1) {
             CounterResult.Success(Unit)
         } else {
@@ -85,7 +85,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun setCounterValue(id: Int, value: Int): CounterResult<Unit> {
+    override suspend fun setCounterValue(id: Int, value: Int): CounterResult<Unit> {
         if (value < 0) return CounterResult.Failure(CounterFailure.INVALID_COUNT)
         return storageResult {
             if (counterDao.setCounterValue(id, value) == 1) {
@@ -96,7 +96,7 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun renameCounter(id: Int, newName: String): CounterResult<Unit> {
+    override suspend fun renameCounter(id: Int, newName: String): CounterResult<Unit> {
         CounterNamePolicy.validate(newName)?.let { return CounterResult.Failure(it) }
         val trimmedName = newName.trim()
         val normalizedName = CounterNamePolicy.normalize(trimmedName)
@@ -124,12 +124,12 @@ class CounterRepository(private val counterDao: CounterDao) : CounterDataSource 
         }
     }
 
-    suspend fun deleteAllCounters(): CounterResult<Unit> = storageResult {
+    override suspend fun deleteAllCounters(): CounterResult<Unit> = storageResult {
         counterDao.deleteAllCounters()
         CounterResult.Success(Unit)
     }
 
-    suspend fun getCounterByIdOnce(id: Int): CounterEntity? = counterDao.getCounterById(id)
+    override suspend fun getCounterByIdOnce(id: Int): CounterEntity? = counterDao.getCounterById(id)
 
     private suspend fun <T> storageResult(
         operation: suspend () -> CounterResult<T>
