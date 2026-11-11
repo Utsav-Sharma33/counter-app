@@ -25,4 +25,6 @@
     <string name="counter_notification_count">Current count: %1$d</string>
     <string name="counter_notification_increment">Increase counter</string>
     <string name="counter_notification_decrement">Decrease counter</string>
+    <string name="counter_tracking_enable">Track in notification</string>
+    <string name="counter_tracking_disable">Stop notification tracking</string>
 </resources>

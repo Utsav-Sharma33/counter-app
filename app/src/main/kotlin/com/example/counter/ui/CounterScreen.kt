@@ -50,10 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.counter.R
 import com.example.counter.data.CounterEntity
 
 @Composable
@@ -343,7 +345,12 @@ fun CounterCard(
             }
             
             TextButton(onClick = onTrackingToggle, modifier = Modifier.fillMaxWidth()) {
-                Text(if (isTracked) "Stop notification tracking" else "Track in notification")
+                Text(
+                    stringResource(
+                        if (isTracked) R.string.counter_tracking_disable
+                        else R.string.counter_tracking_enable
+                    )
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
