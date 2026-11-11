@@ -73,7 +73,6 @@ class CounterViewModel(
     fun createCounter(name: String) {
         if (_uiState.value.isCreating || _uiState.value.isDeletingAll) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isCreating = true, errorMessage = null) }
             try {
                 when (val result = dataSource.createCounter(name)) {
                     is CounterResult.Success -> _uiState.update {
@@ -120,8 +119,8 @@ class CounterViewModel(
 
     fun setTrackingEnabled(id: Int, enabled: Boolean) {
         if (id in _uiState.value.busyCounterIds || _uiState.value.isDeletingAll) return
+        markCounterBusy(id, true)
         viewModelScope.launch {
-            markCounterBusy(id, true)
             try {
                 if (enabled) {
                     val counter = dataSource.getCounterByIdOnce(id)
@@ -162,8 +161,8 @@ class CounterViewModel(
             _uiState.value.busyCounterIds.isNotEmpty()
         ) return
 
+        _uiState.update { it.copy(isDeletingAll = true, errorMessage = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isDeletingAll = true, errorMessage = null) }
             try {
                 when (val result = dataSource.deleteAllCounters()) {
                     is CounterResult.Success -> {
@@ -197,8 +196,8 @@ class CounterViewModel(
         operation: suspend () -> CounterResult<Unit>
     ) {
         if (id in _uiState.value.busyCounterIds || _uiState.value.isDeletingAll) return
+        markCounterBusy(id, true)
         viewModelScope.launch {
-            markCounterBusy(id, true)
             try {
                 when (val result = operation()) {
                     is CounterResult.Success -> {

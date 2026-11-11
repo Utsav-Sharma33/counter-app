@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import com.example.counter.data.CounterDatabase
 import com.example.counter.domain.CounterRepository
+import com.example.counter.notification.AndroidCounterNotificationController
 import com.example.counter.notification.CounterActionReceiver
 import com.example.counter.notification.CounterNotificationManager
 import com.example.counter.ui.CounterApp
@@ -40,7 +41,10 @@ class MainActivity : ComponentActivity() {
         val repository = CounterRepository(CounterDatabase.getDatabase(this).counterDao())
         viewModel = ViewModelProvider(
             this,
-            CounterViewModelFactory(repository, applicationContext)
+            CounterViewModelFactory(
+                repository,
+                AndroidCounterNotificationController(applicationContext)
+            )
         )[CounterViewModel::class.java]
         handleCounterIntent(intent)
         CounterNotificationManager.createNotificationChannel(this)
