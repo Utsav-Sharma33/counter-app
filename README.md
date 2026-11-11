@@ -109,32 +109,25 @@ counter/
 - **Language**: Kotlin 2.2.21
 - **Minimum SDK**: 28 (Android 9.0)
 - **Compile SDK / Target SDK**: 36 (Android 16)
-- **Build System**: Gradle with Kotlin DSL
+- **Build System**: Android Gradle Plugin 8.10.1 with Gradle 8.14
+- **JDK**: 17
 - **UI Framework**: Jetpack Compose with Material Design 3
-- **Database**: Room Database with Kotlin Coroutines
-- **State Management**: StateFlow and LiveData
+- **Database**: Room 2.7.0 with Kotlin Coroutines
+- **State Management**: StateFlow
 - **Architecture Pattern**: MVVM with Repository pattern
 
-## Key Dependencies
+## Dependency policy
 
-```
-androidx.core:core-ktx:1.12.0
-androidx.lifecycle:lifecycle-runtime-ktx:2.6.2
-androidx.activity:activity-compose:1.8.0
-androidx.compose.*:1.5.4 (Material3, UI, Icons)
-androidx.room:room-runtime:2.6.1
-androidx.room:room-ktx:2.6.1
-org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
-```
+Versions are pinned in the Gradle build files. Keep Android Gradle Plugin, Gradle, Kotlin, Compose compiler, and compile SDK upgrades coordinated. Avoid dynamic dependency versions. Run lint, unit tests, instrumentation tests, and a minified release build before publishing a toolchain upgrade.
 
 ## Setup Instructions
 
 ### Prerequisites
 
-- Android Studio 2023.1 or higher
+- Android Studio Meerkat or newer
 - JDK 17
-- Android SDK 34
-- Android Gradle Plugin 8.1.2
+- Android SDK Platform 36 and Build Tools 36.0.0
+- Gradle 8.14
 
 ### Installation
 
@@ -148,7 +141,14 @@ org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
    - File → Open → Select the `counter` directory
    - Wait for Gradle sync to complete
 
-3. **Build the project**
+3. **Generate the local Gradle wrapper** (wrapper files are intentionally generated in CI and are not checked into this repository)
+
+   ```bash
+   gradle wrapper --gradle-version 8.14 --distribution-type bin
+   chmod +x ./gradlew
+   ```
+
+4. **Build the project**
 
    ```bash
    ./gradlew build
