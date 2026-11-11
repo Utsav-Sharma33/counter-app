@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -65,10 +66,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch {
-            val counters = withContext(Dispatchers.IO) {
-                CounterDatabase.getDatabase(applicationContext).counterDao().getAllCountersOnce()
+            try {
+                val counters = withContext(Dispatchers.IO) {
+                    CounterDatabase.getDatabase(applicationContext).counterDao().getAllCountersOnce()
+                }
+                CounterNotificationManager.syncTrackedCounters(applicationContext, counters)
+            } catch (exception: Exception) {
+                Log.e("MainActivity", "Unable to restore tracked counter notifications", exception)
             }
-            CounterNotificationManager.syncTrackedCounters(applicationContext, counters)
         }
     }
 

@@ -40,4 +40,12 @@ class CounterNotificationManagerTest {
         )
         assertTrue(CounterNotificationManager.getTrackedCounterIds(context).isEmpty())
     }
+
+    @Test
+    fun countersDeletedFromDatabaseAreRemovedFromTracking() {
+        CounterNotificationManager.clearTrackedCounters(context)
+        CounterNotificationManager.enableTracking(context, 31)
+        CounterNotificationManager.syncTrackedCounters(context, emptyList())
+        assertTrue(CounterNotificationManager.getTrackedCounterIds(context).isEmpty())
+    }
 }
