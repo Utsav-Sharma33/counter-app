@@ -233,14 +233,9 @@ These are automatically handled by the system on Android 13+.
 
 ## State Management Details
 
-### ViewModel State
+The ViewModel exposes a single immutable `StateFlow<CounterUiState>`. The state includes the counter list, initial loading and mutation flags, selected counter, notification tracking IDs, per-counter busy state, and a user-safe error message.
 
-- **counters**: StateFlow of all counters
-- **isLoading**: Loading state for async operations
-- **errorMessage**: Error messages for user feedback
-- **selectedCounterId**: Currently selected counter
-
-### Data Persistence
+## Data Persistence
 
 - All counters are stored in Room Database
 - Automatic saving on every operation
@@ -259,6 +254,8 @@ The app handles various error scenarios:
 6. **Permission Issues**: Handles missing notification permissions on API 33+
 
 ## Testing
+
+Unit and instrumentation test cases are present in the repository, but they have not yet been executed. The checklist below is a manual test plan, not a record of completed validation.
 
 ### Manual Testing Checklist
 
