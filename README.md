@@ -275,7 +275,7 @@ The app handles various error scenarios:
 - [ ] Lock screen and use notification actions
 - [ ] Create multiple counters and manage them
 
-### Edge Cases Tested
+### Edge Cases Covered by Test Cases (execution pending)
 
 - Empty database initialization
 - Concurrent counter operations
