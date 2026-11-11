@@ -4,7 +4,7 @@
 **Target branch:** `main`  
 **Baseline commit:** `3bc35230994f45bb2634d4919cc17f39e4e27133`  
 **Audit date:** 2026-11-11  
-**Status:** Phase 1 through Phase 4 implementation committed; build and test execution pending
+**Status:** Phases 1–4 implementation committed; Phase 5 test expansion and coverage configuration committed; test execution and 95% coverage verification pending
 
 ## Purpose
 
@@ -244,7 +244,8 @@ Acceptance:
 
 **Implementation status (2026-11-11):** Added and expanded the suite to 57 test methods across repository/domain (23), ViewModel (10), receiver (4), Room DAO/migration (9), notification tracking (4), and Compose UI (7). Repository cases cover name validation/normalization, duplicates, rename, increment/decrement boundaries and missing rows, set/reset/delete/delete-all, storage failures, and cancellation. Room instrumentation covers concurrent increments/decrements, integer bounds, timestamp invariants, unique normalized-name enforcement, and create/rename database-constraint races. ViewModel tests cover delete-all cleanup, missing-counter notification tracking, error clearing, and create failures. Compose tests include selected-state accessibility semantics. JaCoCo 0.8.12 reporting is configured for debug JVM unit tests with generated Android/Kotlin classes excluded; debug unit-test and instrumentation coverage collection are enabled. **No Gradle build, unit tests, instrumentation tests, or coverage report has been executed. The 95% core domain/repository target is not yet measured or claimed.** CI workflows have not been run.
 
-**Local validation commands (when a Gradle 8.4 environment is available):**
+**Local validation commands (when Gradle 8.4 and an Android SDK are available):**
+- Generate the local wrapper first because wrapper files are intentionally not checked in: `gradle wrapper --gradle-version 8.4 --distribution-type bin`
 - JVM tests and report: `./gradlew :app:testDebugUnitTest :app:jacocoTestReport`
 - Connected Room/Compose/notification instrumentation tests and Android coverage: `./gradlew :app:createDebugCoverageReport`
 - HTML JVM coverage report: `app/build/reports/jacoco/jacocoTestReport/html/index.html`
