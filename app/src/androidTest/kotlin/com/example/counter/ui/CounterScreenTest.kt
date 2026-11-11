@@ -75,6 +75,32 @@ class CounterScreenTest {
     }
 
     @Test
+    fun deleteAllRequiresConfirmation() {
+        showCounters(
+            CounterEntity(id = 1, name = "Steps"),
+            CounterEntity(id = 2, name = "Water")
+        )
+
+        composeRule.onNodeWithContentDescription("Delete all counters").performClick()
+        composeRule.onNodeWithText("Delete all counters").assertExists()
+        composeRule.onAllNodesWithText("Delete").onLast().performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("No Counters Yet").assertExists()
+    }
+
+    @Test
+    fun mutationFailureIsShownInSnackbar() {
+        dataSource.incrementFailure = CounterFailure.STORAGE_ERROR
+        showCounters(CounterEntity(id = 1, name = "Steps", count = 2))
+
+        composeRule.onNodeWithContentDescription("Increment").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Unable to save the counter. Please try again.").assertExists()
+    }
+
+    @Test
     fun createAndRenameCounterUseStateDrivenCallbacks() {
         composeRule.setContent {
             CounterAppTheme {
