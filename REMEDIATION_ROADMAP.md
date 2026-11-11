@@ -4,7 +4,7 @@
 **Target branch:** `main`  
 **Baseline commit:** `3bc35230994f45bb2634d4919cc17f39e4e27133`  
 **Audit date:** 2026-11-11  
-**Status:** Phases 1–4 implementation committed; Phase 5 test expansion and coverage configuration committed; test execution and 95% coverage verification pending
+**Status:** Phases 1–6 implementation/configuration committed; build, test, coverage, signed-release, and device validation pending
 
 ## Purpose
 
