@@ -10,6 +10,8 @@ import com.example.counter.domain.CounterResult
 import com.example.counter.notification.CounterNotificationController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -34,7 +36,7 @@ class CounterViewModel(
     private val _uiState = MutableStateFlow(
         CounterUiState(trackedCounterIds = notifications.trackedCounterIds())
     )
-    val uiState = _uiState
+    val uiState: StateFlow<CounterUiState> = _uiState.asStateFlow()
 
     init {
         observeCounters()
@@ -72,6 +74,7 @@ class CounterViewModel(
 
     fun createCounter(name: String) {
         if (_uiState.value.isCreating || _uiState.value.isDeletingAll) return
+        _uiState.update { it.copy(isCreating = true, errorMessage = null) }
         viewModelScope.launch {
             try {
                 when (val result = dataSource.createCounter(name)) {
