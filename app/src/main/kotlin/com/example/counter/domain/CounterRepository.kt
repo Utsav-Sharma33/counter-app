@@ -6,7 +6,7 @@ import com.example.counter.data.CounterEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
-class CounterRepository(private val counterDao: CounterDao) {
+class CounterRepository(private val counterDao: CounterDao) : CounterDataSource {
 
     fun getAllCounters(): Flow<List<CounterEntity>> = counterDao.getAllCounters()
 

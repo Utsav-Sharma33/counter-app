@@ -1,182 +1,271 @@
 package com.example.counter.ui
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.counter.data.CounterEntity
+import com.example.counter.domain.CounterDataSource
 import com.example.counter.domain.CounterFailure
-import com.example.counter.domain.CounterRepository
 import com.example.counter.domain.CounterResult
-import com.example.counter.notification.CounterNotificationManager
+import com.example.counter.notification.CounterNotificationController
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class CounterViewModel(private val repository: CounterRepository, context: Context) : ViewModel() {
-    private val appContext = context.applicationContext
-    private val _counters = MutableStateFlow<List<CounterEntity>>(emptyList())
-    val counters: StateFlow<List<CounterEntity>> = _counters.asStateFlow()
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-    private val _selectedCounterId = MutableStateFlow<Int?>(null)
-    val selectedCounterId: StateFlow<Int?> = _selectedCounterId.asStateFlow()
-    private val _trackedCounterIds = MutableStateFlow(
-        CounterNotificationManager.getTrackedCounterIds(appContext)
+data class CounterUiState(
+    val counters: List<CounterEntity> = emptyList(),
+    val isInitialLoading: Boolean = true,
+    val isCreating: Boolean = false,
+    val isDeletingAll: Boolean = false,
+    val busyCounterIds: Set<Int> = emptySet(),
+    val selectedCounterId: Int? = null,
+    val trackedCounterIds: Set<Int> = emptySet(),
+    val errorMessage: String? = null
+)
+
+class CounterViewModel(
+    private val dataSource: CounterDataSource,
+    private val notifications: CounterNotificationController
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(
+        CounterUiState(trackedCounterIds = notifications.trackedCounterIds())
     )
-    val trackedCounterIds: StateFlow<Set<Int>> = _trackedCounterIds.asStateFlow()
+    val uiState = _uiState
 
-    init { loadCounters() }
+    init {
+        observeCounters()
+    }
 
-    private fun loadCounters() {
+    private fun observeCounters() {
         viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                repository.getAllCounters().collect { list ->
-                    _counters.value = list
-                    _isLoading.value = false
-                    CounterNotificationManager.syncTrackedCounters(appContext, list)
-                    _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
+            dataSource.getAllCounters()
+                .onEach { counters ->
+                    _uiState.update { state ->
+                        state.copy(
+                            counters = counters,
+                            isInitialLoading = false,
+                            selectedCounterId = state.selectedCounterId
+                                ?.takeIf { selectedId -> counters.any { it.id == selectedId } }
+                        )
+                    }
+                    notifications.syncTrackedCounters(counters)
+                    _uiState.update {
+                        it.copy(trackedCounterIds = notifications.trackedCounterIds())
+                    }
                 }
-            } catch (exception: Exception) {
-                handleError("Failed to load counters")
-            }
+                .catch { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    _uiState.update {
+                        it.copy(
+                            isInitialLoading = false,
+                            errorMessage = "Unable to load counters. Please try again."
+                        )
+                    }
+                }
+                .collect { }
         }
     }
 
     fun createCounter(name: String) {
+        if (_uiState.value.isCreating || _uiState.value.isDeletingAll) return
         viewModelScope.launch {
-            _isLoading.value = true
-            when (val result = repository.createCounter(name)) {
-                is CounterResult.Success -> {
-                    _selectedCounterId.value = result.value.toInt()
-                    _isLoading.value = false
-                    clearError()
+            _uiState.update { it.copy(isCreating = true, errorMessage = null) }
+            try {
+                when (val result = dataSource.createCounter(name)) {
+                    is CounterResult.Success -> _uiState.update {
+                        it.copy(selectedCounterId = result.value.toInt(), errorMessage = null)
+                    }
+                    is CounterResult.Failure -> showFailure(result.reason)
                 }
-                is CounterResult.Failure -> handleFailure(result.reason)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showMessage("Unable to create the counter. Please try again.")
+            } finally {
+                _uiState.update { it.copy(isCreating = false) }
             }
         }
     }
 
-    fun deleteCounter(counter: CounterEntity) {
-        viewModelScope.launch {
-            when (val result = repository.deleteCounter(counter)) {
+    fun deleteCounter(counterId: Int) {
+        runCounterOperation(counterId) {
+            when (val result = dataSource.deleteCounter(counterId)) {
                 is CounterResult.Success -> {
-                    CounterNotificationManager.removeTrackedCounter(appContext, counter.id)
-                    _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
-                    if (_selectedCounterId.value == counter.id) _selectedCounterId.value = null
-                    clearError()
+                    notifications.removeTrackedCounter(counterId)
+                    _uiState.update {
+                        it.copy(
+                            selectedCounterId = it.selectedCounterId.takeUnless { id -> id == counterId },
+                            trackedCounterIds = notifications.trackedCounterIds(),
+                            errorMessage = null
+                        )
+                    }
+                    CounterResult.Success(Unit)
                 }
-                is CounterResult.Failure -> handleFailure(result.reason)
+                is CounterResult.Failure -> result
             }
         }
     }
 
-    fun incrementCounter(id: Int) = runMutation(id) { repository.incrementCounter(id) }
-    fun decrementCounter(id: Int) = runMutation(id) { repository.decrementCounter(id) }
-    fun resetCounter(id: Int) = runMutation(id) { repository.resetCounter(id) }
-    fun setCounterValue(id: Int, value: Int) = runMutation(id) { repository.setCounterValue(id, value) }
-    fun renameCounter(id: Int, newName: String) = runMutation(id) { repository.renameCounter(id, newName) }
+    fun incrementCounter(id: Int) = runCounterOperation(id) { dataSource.incrementCounter(id) }
+    fun decrementCounter(id: Int) = runCounterOperation(id) { dataSource.decrementCounter(id) }
+    fun resetCounter(id: Int) = runCounterOperation(id) { dataSource.resetCounter(id) }
+    fun setCounterValue(id: Int, value: Int) =
+        runCounterOperation(id) { dataSource.setCounterValue(id, value) }
+    fun renameCounter(id: Int, newName: String) =
+        runCounterOperation(id) { dataSource.renameCounter(id, newName) }
 
     fun setTrackingEnabled(id: Int, enabled: Boolean) {
+        if (id in _uiState.value.busyCounterIds || _uiState.value.isDeletingAll) return
         viewModelScope.launch {
-            if (enabled) {
-                val counter = try {
-                    repository.getCounterByIdOnce(id)
-                } catch (exception: Exception) {
-                    handleError("Unable to enable notification tracking")
-                    return@launch
+            markCounterBusy(id, true)
+            try {
+                if (enabled) {
+                    val counter = dataSource.getCounterByIdOnce(id)
+                    if (counter == null) {
+                        showFailure(CounterFailure.COUNTER_NOT_FOUND)
+                        return@launch
+                    }
+                    notifications.enableTracking(id)
+                    notifications.syncCounterIfTracked(counter)
+                } else {
+                    notifications.removeTrackedCounter(id)
                 }
-                if (counter == null) {
-                    handleFailure(CounterFailure.COUNTER_NOT_FOUND)
-                    return@launch
+                _uiState.update {
+                    it.copy(trackedCounterIds = notifications.trackedCounterIds(), errorMessage = null)
                 }
-                CounterNotificationManager.enableTracking(appContext, id)
-                CounterNotificationManager.syncCounterIfTracked(appContext, counter)
-            } else {
-                CounterNotificationManager.removeTrackedCounter(appContext, id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showMessage("Unable to update notification tracking. Please try again.")
+            } finally {
+                markCounterBusy(id, false)
             }
-            _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
-            clearError()
         }
     }
 
-    fun selectCounter(id: Int?) { _selectedCounterId.value = id }
+    fun selectCounter(id: Int?) {
+        _uiState.update { state ->
+            state.copy(
+                selectedCounterId = id?.takeIf { selectedId ->
+                    state.counters.any { it.id == selectedId }
+                }
+            )
+        }
+    }
 
     fun deleteAllCounters() {
+        if (_uiState.value.isDeletingAll || _uiState.value.isCreating ||
+            _uiState.value.busyCounterIds.isNotEmpty()
+        ) return
+
         viewModelScope.launch {
-            when (val result = repository.deleteAllCounters()) {
-                is CounterResult.Success -> {
-                    CounterNotificationManager.clearTrackedCounters(appContext)
-                    _trackedCounterIds.value = emptySet()
-                    _selectedCounterId.value = null
-                    clearError()
+            _uiState.update { it.copy(isDeletingAll = true, errorMessage = null) }
+            try {
+                when (val result = dataSource.deleteAllCounters()) {
+                    is CounterResult.Success -> {
+                        notifications.clearTrackedCounters()
+                        _uiState.update {
+                            it.copy(
+                                selectedCounterId = null,
+                                trackedCounterIds = emptySet(),
+                                errorMessage = null
+                            )
+                        }
+                    }
+                    is CounterResult.Failure -> showFailure(result.reason)
                 }
-                is CounterResult.Failure -> handleFailure(result.reason)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showMessage("Unable to delete counters. Please try again.")
+            } finally {
+                _uiState.update { it.copy(isDeletingAll = false) }
             }
         }
     }
 
-    fun getCounterById(id: Int): CounterEntity? = _counters.value.find { it.id == id }
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
 
-    private fun runMutation(id: Int, operation: suspend () -> CounterResult<Unit>) {
+    private fun runCounterOperation(
+        id: Int,
+        operation: suspend () -> CounterResult<Unit>
+    ) {
+        if (id in _uiState.value.busyCounterIds || _uiState.value.isDeletingAll) return
         viewModelScope.launch {
-            when (val result = operation()) {
-                is CounterResult.Success -> {
-                    syncTrackedCounter(id)
-                    clearError()
+            markCounterBusy(id, true)
+            try {
+                when (val result = operation()) {
+                    is CounterResult.Success -> {
+                        syncTrackedCounter(id)
+                        _uiState.update { it.copy(errorMessage = null) }
+                    }
+                    is CounterResult.Failure -> {
+                        syncTrackedCounter(id)
+                        showFailure(result.reason)
+                    }
                 }
-                is CounterResult.Failure -> {
-                    syncTrackedCounter(id)
-                    handleFailure(result.reason)
-                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                showMessage("Unable to save the counter. Please try again.")
+            } finally {
+                markCounterBusy(id, false)
             }
         }
     }
 
     private suspend fun syncTrackedCounter(id: Int) {
-        val counter = try { repository.getCounterByIdOnce(id) } catch (exception: Exception) { return }
+        val counter = dataSource.getCounterByIdOnce(id)
         if (counter == null) {
-            CounterNotificationManager.removeTrackedCounter(appContext, id)
-            _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
+            notifications.removeTrackedCounter(id)
+            _uiState.update { it.copy(trackedCounterIds = notifications.trackedCounterIds()) }
         } else {
-            CounterNotificationManager.syncCounterIfTracked(appContext, counter)
+            notifications.syncCounterIfTracked(counter)
         }
     }
 
-    private fun handleFailure(failure: CounterFailure) {
-        _errorMessage.value = when (failure) {
-            CounterFailure.INVALID_NAME -> "Counter name cannot be empty"
-            CounterFailure.NAME_TOO_LONG -> "Counter name cannot exceed 50 characters"
-            CounterFailure.DUPLICATE_NAME -> "Counter with this name already exists"
-            CounterFailure.COUNTER_NOT_FOUND -> "Counter no longer exists"
-            CounterFailure.COUNTER_AT_MINIMUM -> "Counter is already zero"
-            CounterFailure.COUNTER_AT_MAXIMUM -> "Counter has reached its maximum value"
-            CounterFailure.INVALID_COUNT -> "Counter value cannot be negative"
-            CounterFailure.STORAGE_ERROR -> "Unable to save the counter. Please try again"
+    private fun markCounterBusy(id: Int, busy: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                busyCounterIds = if (busy) state.busyCounterIds + id
+                else state.busyCounterIds - id
+            )
         }
-        _isLoading.value = false
     }
 
-    private fun handleError(message: String) {
-        _errorMessage.value = message
-        _isLoading.value = false
+    private fun showFailure(failure: CounterFailure) {
+        val message = when (failure) {
+            CounterFailure.INVALID_NAME -> "Counter name cannot be empty."
+            CounterFailure.NAME_TOO_LONG -> "Counter name cannot exceed 50 characters."
+            CounterFailure.DUPLICATE_NAME -> "A counter with this name already exists."
+            CounterFailure.COUNTER_NOT_FOUND -> "This counter no longer exists."
+            CounterFailure.COUNTER_AT_MINIMUM -> "The counter is already zero."
+            CounterFailure.COUNTER_AT_MAXIMUM -> "The counter has reached its maximum value."
+            CounterFailure.INVALID_COUNT -> "Counter value cannot be negative."
+            CounterFailure.STORAGE_ERROR -> "Unable to save the counter. Please try again."
+        }
+        showMessage(message)
     }
 
-    fun clearError() { _errorMessage.value = null }
+    private fun showMessage(message: String) {
+        _uiState.update { it.copy(errorMessage = message) }
+    }
 }
 
 class CounterViewModelFactory(
-    private val repository: CounterRepository,
-    private val context: Context
+    private val dataSource: CounterDataSource,
+    private val notifications: CounterNotificationController
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CounterViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return CounterViewModel(repository, context) as T
+            return CounterViewModel(dataSource, notifications) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
