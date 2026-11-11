@@ -4,7 +4,7 @@
 **Target branch:** `main`  
 **Baseline commit:** `3bc35230994f45bb2634d4919cc17f39e4e27133`  
 **Audit date:** 2026-11-11  
-**Status:** Audit complete; remediation not yet started
+**Status:** Phase 1 implementation committed; build and Android runtime validation pending
 
 ## Purpose
 
@@ -308,13 +308,13 @@ Acceptance:
 
 | File or path | Work required | Priority | Status |
 |---|---|---:|---|
-| `.github/workflows/build.yml` | Install pinned Gradle and generate wrapper before use | P0 | [ ] |
-| `build.gradle.kts` | Align Kotlin/Compose plugin versions | P0 | [ ] |
-| `app/build.gradle.kts` | Compose plugin, dependencies, tests, signing | P0/P2 | [ ] |
+| `.github/workflows/build.yml` | Install pinned Gradle and generate wrapper before use | P0 | Implemented; CI intentionally not run |
+| `build.gradle.kts` | Align Kotlin/Compose plugin versions | P0 | Implemented; build validation pending |
+| `app/build.gradle.kts` | Compose compiler plugin configuration | P0 | Implemented; build validation pending |
 | `settings.gradle.kts` | Verify plugin and dependency repositories | P2 | [ ] |
 | `gradle.properties` | Review obsolete/unsupported flags | P2 | [ ] |
-| `app/src/main/res/xml/data_extraction_rules.xml` | Correct Android data extraction schema | P0 | [ ] |
-| `app/src/main/res/xml/backup_rules.xml` | Verify legacy backup rules | P1 | [ ] |
+| `app/src/main/res/xml/data_extraction_rules.xml` | Correct Android data extraction schema | P0 | Implemented; Android runtime validation pending |
+| `app/src/main/res/xml/backup_rules.xml` | Align legacy backup inclusion rules | P1 | Implemented; Android runtime validation pending |
 | `app/src/main/AndroidManifest.xml` | Permission, receiver, backup and activity config | P1 | [ ] |
 | `data/CounterDatabase.kt` | Remove destructive fallback; schema export/migrations | P0 | [ ] |
 | `data/CounterEntity.kt` | Count/name constraints and schema decisions | P1 | [ ] |
