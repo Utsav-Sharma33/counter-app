@@ -151,6 +151,8 @@ Acceptance:
 
 ### Phase 3 — Notification reliability
 
+**Implementation status (2026-11-11):** Receiver lifecycle and tracked-notification synchronization have been implemented and committed. Receiver action unit tests and notification tracking instrumentation tests have been added. Build, unit-test, instrumentation-test, permission-flow, and physical-device validation remain pending. CI has not been run.
+
 #### 3.1 Receiver execution lifecycle
 **Files:** `notification/CounterActionReceiver.kt`, potentially a worker under `notification/` or `worker/`, `AndroidManifest.xml`
 
@@ -320,9 +322,9 @@ Acceptance:
 | `data/CounterEntity.kt` | Count/name constraints and normalized unique key | P1 | Implemented; build validation pending |
 | `data/CounterDao.kt` | Atomic updates, uniqueness, affected-row results | P0 | Implemented; instrumentation execution pending |
 | `domain/CounterRepository.kt` | Validation, typed outcomes, concurrency contracts | P1 | Implemented; unit-test execution pending |
-| `notification/CounterActionReceiver.kt` | Bounded background execution and error handling | P0 | [ ] |
-| `notification/CounterNotificationManager.kt` | Notification lifecycle and PendingIntent identity | P0 | [ ] |
-| `MainActivity.kt` | Remove destructive notification cleanup; permission flow | P1 | [ ] |
+| `notification/CounterActionReceiver.kt` | Bounded background execution and error handling | P0 | Implemented; tests added, execution pending |
+| `notification/CounterNotificationManager.kt` | Notification lifecycle, tracking state, and PendingIntent identity | P0 | Implemented; runtime validation pending |
+| `MainActivity.kt` | Remove destructive notification cleanup; permission flow and notification deep link | P1 | Implemented; runtime validation pending |
 | `ui/CounterViewModel.kt` | State, error mapping, loading and selection | P1 | Updated for typed repository outcomes; further Phase 4 work remains |
 | `ui/CounterScreen.kt` | Lifecycle state, callbacks, accessibility, UX | P2 | [ ] |
 | `ui/theme/Theme.kt`, `ui/theme/Type.kt` | Accessibility and visual consistency review | P3 | [ ] |

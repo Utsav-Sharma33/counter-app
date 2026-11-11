@@ -18,6 +18,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.CounterApp">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -29,8 +30,8 @@
             android:name=".notification.CounterActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="ACTION_INCREMENT" />
-                <action android:name="ACTION_DECREMENT" />
+                <action android:name="com.example.counter.action.INCREMENT" />
+                <action android:name="com.example.counter.action.DECREMENT" />
             </intent-filter>
         </receiver>
 

@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import com.example.counter.data.CounterDatabase
 import com.example.counter.domain.CounterRepository
+import com.example.counter.notification.CounterActionReceiver
 import com.example.counter.notification.CounterNotificationManager
 import com.example.counter.ui.CounterApp
 import com.example.counter.ui.CounterViewModel
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
             this,
             CounterViewModelFactory(repository, applicationContext)
         )[CounterViewModel::class.java]
+        handleCounterIntent(intent)
         CounterNotificationManager.createNotificationChannel(this)
         enableEdgeToEdge()
         setContent {
@@ -47,6 +49,17 @@ class MainActivity : ComponentActivity() {
                 CounterApp(viewModel, ::requestTrackingPermission)
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleCounterIntent(intent)
+    }
+
+    private fun handleCounterIntent(intent: android.content.Intent?) {
+        val counterId = intent?.getIntExtra(CounterActionReceiver.EXTRA_COUNTER_ID, -1) ?: -1
+        if (counterId > 0) viewModel.selectCounter(counterId)
     }
 
     override fun onResume() {

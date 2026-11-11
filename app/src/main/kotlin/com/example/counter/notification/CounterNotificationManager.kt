@@ -135,6 +135,28 @@ object CounterNotificationManager {
 
     private fun dismissCounterNotification(context: Context, counterId: Int) {
         NotificationManagerCompat.from(context).cancel(counterId)
+
+        val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        PendingIntent.getActivity(
+            context,
+            counterId,
+            Intent(context, MainActivity::class.java).apply {
+                data = Uri.parse("counter-app://counter/${counterId}")
+            },
+            flags
+        )?.cancel()
+
+        listOf(
+            CounterActionReceiver.ACTION_INCREMENT,
+            CounterActionReceiver.ACTION_DECREMENT
+        ).forEach { action ->
+            PendingIntent.getBroadcast(
+                context,
+                counterId,
+                Intent(context, CounterActionReceiver::class.java).apply { this.action = action },
+                flags
+            )?.cancel()
+        }
     }
 
     private fun preferences(context: Context) =
