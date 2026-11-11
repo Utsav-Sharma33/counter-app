@@ -4,7 +4,7 @@
 **Target branch:** `main`  
 **Baseline commit:** `3bc35230994f45bb2634d4919cc17f39e4e27133`  
 **Audit date:** 2026-11-11  
-**Status:** Phase 1, Phase 2, and Phase 3 implementation committed; build and test execution pending
+**Status:** Phase 1 through Phase 4 implementation committed; build and test execution pending
 
 ## Purpose
 
@@ -202,6 +202,8 @@ Acceptance:
 
 ### Phase 4 — ViewModel and Compose architecture
 
+**Implementation status (2026-11-11):** The ViewModel now exposes a single immutable UI state, uses an injectable data-source contract and notification controller, isolates per-counter operation state, prevents duplicate in-flight actions, preserves coroutine cancellation, and clears stale selection. Compose screens use lifecycle-aware state collection and callbacks, stable list keys, accessible icon labels, visible snackbars, and confirmation dialogs for reset/delete. ViewModel unit tests and Compose workflow instrumentation tests have been added. Test execution, compilation, TalkBack, font-scale, and physical-device layout validation remain pending; CI has not been run.
+
 #### 4.1 ViewModel state and operation handling
 **Files:** `ui/CounterViewModel.kt`, new UI state/event types under `ui/`
 
@@ -232,9 +234,9 @@ Tasks:
 - Add stable keys to lazy list items.
 
 Acceptance:
-- UI tests cover create, rename, increment, decrement, reset, delete, and error flows.
-- Controls are usable with TalkBack and large font settings.
-- UI state survives recomposition and configuration changes where expected.
+- Compose tests have been added for create, rename, increment, decrement, reset and delete; execution remains pending.
+- Controls are usable with TalkBack and large font settings; physical-device verification remains pending.
+- UI state is held in the ViewModel and dialog state uses saveable Compose state; configuration-change verification remains pending.
 
 ### Phase 5 — Automated testing
 
@@ -325,14 +327,16 @@ Acceptance:
 | `notification/CounterActionReceiver.kt` | Bounded background execution and error handling | P0 | Implemented; tests added, execution pending |
 | `notification/CounterNotificationManager.kt` | Notification lifecycle, tracking state, and PendingIntent identity | P0 | Implemented; runtime validation pending |
 | `MainActivity.kt` | Remove destructive notification cleanup; permission flow and notification deep link | P1 | Implemented; runtime validation pending |
-| `ui/CounterViewModel.kt` | State, error mapping, loading and selection | P1 | Updated for typed repository outcomes; further Phase 4 work remains |
-| `ui/CounterScreen.kt` | Lifecycle state, callbacks, accessibility, UX | P2 | [ ] |
-| `ui/theme/Theme.kt`, `ui/theme/Type.kt` | Accessibility and visual consistency review | P3 | [ ] |
-| `res/values/strings.xml` | Notification channel and action labels | P2 | Implemented; translation review pending |
+| `ui/CounterViewModel.kt` | Immutable UI state, deterministic operations, errors and selection | P1 | Implemented; unit-test execution pending |
+| `ui/CounterScreen.kt` | Lifecycle-aware state, callback-only child composables, accessibility and confirmations | P2 | Implemented; Compose test execution pending |
+| `ui/theme/Theme.kt`, `ui/theme/Type.kt` | Accessibility and visual consistency review | P3 | Typography used throughout UI; contrast/device review pending |
+| `res/values/strings.xml` | Notification and primary UI labels | P2 | Implemented; translation review pending |
+| `domain/CounterDataSource.kt` | ViewModel-facing repository contract | P1 | Implemented |
+| `notification/CounterNotificationController.kt`, `AndroidCounterNotificationController.kt` | Inject notification behavior outside ViewModel | P1 | Implemented |
 | `app/proguard-rules.pro` | Validate rules against minified release | P2 | [ ] |
 | `.github/workflows/build.yml` | Wrapper, tag trigger, permissions, truthful status | P2 | [ ] |
-| `app/src/test/**` | Repository unit tests | P0 | Added; execution pending |
-| `app/src/androidTest/**` | Room migration and atomic DAO tests | P0 | Added; execution pending |
+| `app/src/test/**` | Repository and ViewModel unit tests | P0 | Added; execution pending |
+| `app/src/androidTest/**` | Room migration, atomic DAO and Compose workflow tests | P0 | Added; execution pending |
 
 ## Suggested commit sequence
 
