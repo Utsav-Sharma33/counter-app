@@ -102,6 +102,30 @@ class CounterDaoAtomicityTest {
         assertEquals(1, dao.getAllCountersOnce().size)
     }
 
+
+    @Test
+    fun repositoryMapsRenameUniquenessRaceToDuplicateName() = runBlocking {
+        dao.insertCounter(CounterEntity(name = "Water", normalizedName = "water"))
+        val racingDao = object : CounterDao by dao {
+            override suspend fun renameCounter(
+                id: Int,
+                newName: String,
+                normalizedName: String,
+                timestamp: Long
+            ): Int {
+                throw SQLiteConstraintException("unique normalized name")
+            }
+        }
+        val repository = CounterRepository(racingDao)
+
+        val result = repository.renameCounter(1, "Steps")
+
+        assertEquals(
+            CounterFailure.DUPLICATE_NAME,
+            (result as CounterResult.Failure).reason
+        )
+    }
+
     @Test
     fun setCounterValueRejectsNegativeValuesWithoutMutation() = runBlocking {
         val id = dao.insertCounter(CounterEntity(name = "Bounded", count = 5))
