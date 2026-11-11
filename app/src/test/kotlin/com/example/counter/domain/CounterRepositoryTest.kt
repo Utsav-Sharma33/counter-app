@@ -5,6 +5,7 @@ import com.example.counter.data.CounterEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -20,6 +21,24 @@ class CounterRepositoryTest {
     fun setUp() {
         dao = FakeCounterDao()
         repository = CounterRepository(dao)
+    }
+
+
+    @Test
+    fun counterFlowsExposeCurrentRows() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Water"))
+
+        assertEquals("Water", repository.getCounterById(1).first()?.name)
+        assertEquals(listOf("Water"), repository.getAllCounters().first().map { it.name })
+    }
+
+    @Test
+    fun deleteCounterEntityOverloadDeletesMatchingRow() = runBlocking {
+        val entity = CounterEntity(id = 1, name = "Water")
+        dao.insertCounter(entity)
+
+        assertTrue(repository.deleteCounter(entity) is CounterResult.Success)
+        assertTrue(dao.rows.value.isEmpty())
     }
 
     @Test
