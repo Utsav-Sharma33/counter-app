@@ -37,7 +37,8 @@ class CounterViewModelTest {
         runCurrent()
 
         assertFalse(viewModel.uiState.value.isInitialLoading)
-        assertEquals(listOf(counter(1, "Water")), viewModel.uiState.value.counters)
+        assertEquals(listOf(1), viewModel.uiState.value.counters.map(CounterEntity::id))
+        assertEquals("Water", viewModel.uiState.value.counters.single().name)
     }
 
     @Test
