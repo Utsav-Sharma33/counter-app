@@ -1,5 +1,6 @@
 package com.example.counter.data
 
+import android.content.ContentValues
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
@@ -17,28 +18,35 @@ abstract class CounterDatabase : RoomDatabase() {
                 database.execSQL(
                     "ALTER TABLE counters ADD COLUMN normalizedName TEXT NOT NULL DEFAULT ''"
                 )
-                database.execSQL(
-                    """
-                    UPDATE counters
-                    SET normalizedName = CASE
-                        WHEN TRIM(name) = '' THEN '__legacy_empty__:' || id
-                        ELSE LOWER(TRIM(name))
-                    END
-                    """.trimIndent()
-                )
-                // Preserve all legacy rows, including any duplicate names that may
-                // have been created by concurrent operations in the old app.
-                database.execSQL(
-                    """
-                    UPDATE counters
-                    SET normalizedName = normalizedName || '#legacy-' || id
-                    WHERE id NOT IN (
-                        SELECT MIN(id)
-                        FROM counters
-                        GROUP BY LOWER(TRIM(name))
-                    )
-                    """.trimIndent()
-                )
+
+                // Normalize in Kotlin so migration behavior matches new writes for
+                // non-ASCII names as well as ASCII names.
+                val seenNames = mutableSetOf<String>()
+                database.query("SELECT id, name FROM counters ORDER BY id").use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow("id")
+                    val nameColumn = cursor.getColumnIndexOrThrow("name")
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getInt(idColumn)
+                        val name = cursor.getString(nameColumn)
+                        val normalized = CounterNameNormalizer.normalize(name)
+                        val uniqueKey = if (seenNames.add(normalized)) {
+                            normalized
+                        } else {
+                            "$normalized#legacy-$id"
+                        }
+                        val values = ContentValues().apply {
+                            put("normalizedName", uniqueKey)
+                        }
+                        database.update(
+                            "counters",
+                            androidx.sqlite.db.SupportSQLiteDatabase.CONFLICT_ABORT,
+                            values,
+                            "id = ?",
+                            arrayOf(id.toString())
+                        )
+                    }
+                }
+
                 database.execSQL(
                     "CREATE UNIQUE INDEX IF NOT EXISTS index_counters_normalizedName " +
                         "ON counters(normalizedName)"
