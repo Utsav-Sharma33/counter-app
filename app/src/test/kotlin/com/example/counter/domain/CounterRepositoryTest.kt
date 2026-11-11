@@ -228,6 +228,43 @@ class CounterRepositoryTest {
         )
     }
 
+
+    @Test
+    fun incrementUnexpectedNoOpForExistingCounterReturnsStorageFailure() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Steps", count = 3))
+        dao.forceIncrementNoop = true
+
+        assertEquals(
+            CounterFailure.STORAGE_ERROR,
+            (repository.incrementCounter(1) as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun decrementUnexpectedNoOpForPositiveCounterReturnsStorageFailure() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Steps", count = 3))
+        dao.forceDecrementNoop = true
+
+        assertEquals(
+            CounterFailure.STORAGE_ERROR,
+            (repository.decrementCounter(1) as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun storageOperationPropagatesCancellation() = runBlocking {
+        dao.failure = kotlinx.coroutines.CancellationException("cancelled")
+
+        var propagated = false
+        try {
+            repository.incrementCounter(1)
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            propagated = true
+        }
+
+        assertTrue(propagated)
+    }
+
     @Test
     fun cancellationIsNeverConvertedToStorageFailure() = runBlocking {
         dao.failure = kotlinx.coroutines.CancellationException("cancelled")
@@ -246,6 +283,8 @@ class CounterRepositoryTest {
         val rows = MutableStateFlow<List<CounterEntity>>(emptyList())
         private var nextId = 1
         var failure: Exception? = null
+        var forceIncrementNoop = false
+        var forceDecrementNoop = false
 
         private fun throwIfConfigured() { failure?.let { throw it } }
 
@@ -292,6 +331,7 @@ class CounterRepositoryTest {
 
         override suspend fun incrementCounter(id: Int, timestamp: Long): Int {
             throwIfConfigured()
+            if (forceIncrementNoop) return 0
             val current = getCounterByIdOnce(id) ?: return 0
             if (current.count == Int.MAX_VALUE) return 0
             rows.value = rows.value.map {
@@ -302,6 +342,7 @@ class CounterRepositoryTest {
 
         override suspend fun decrementCounter(id: Int, timestamp: Long): Int {
             throwIfConfigured()
+            if (forceDecrementNoop) return 0
             val current = getCounterByIdOnce(id) ?: return 0
             if (current.count <= 0) return 0
             rows.value = rows.value.map {
