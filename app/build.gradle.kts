@@ -1,8 +1,11 @@
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("kotlin-kapt")
+    id("jacoco")
 }
 
 android {
@@ -23,6 +26,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
         release {
             isMinifyEnabled = true
             shrinkResources = true
@@ -51,6 +57,54 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    group = "verification"
+    description = "Generates the debug JVM unit-test JaCoCo report."
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+
+    val generatedCodeExclusions = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*_Factory.*",
+        "**/*_MembersInjector.*",
+        "**/*_Hilt*.*",
+        "**/databinding/**",
+        "**/BR.*"
+    )
+    val kotlinClasses = fileTree("$buildDir/tmp/kotlin-classes/debug") {
+        exclude(generatedCodeExclusions)
+    }
+    val javaClasses = fileTree(
+        "$buildDir/intermediates/javac/debug/compileDebugJavaWithJavac/classes"
+    ) {
+        exclude(generatedCodeExclusions)
+    }
+
+    sourceDirectories.setFrom(files("$projectDir/src/main/kotlin"))
+    classDirectories.setFrom(files(kotlinClasses, javaClasses))
+    executionData.setFrom(
+        fileTree("$buildDir") {
+            include(
+                "jacoco/testDebugUnitTest.exec",
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec"
+            )
+        }
+    )
 }
 
 kapt {
