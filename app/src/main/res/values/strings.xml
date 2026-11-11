@@ -35,4 +35,6 @@
     <string name="reset_counter">Reset counter</string>
     <string name="reset_counter_confirmation">Reset %1$s to zero?</string>
     <string name="delete_counter_confirmation_named">Delete %1$s? This cannot be undone.</string>
+    <string name="counter_details_expand">Show counter details</string>
+    <string name="counter_details_collapse">Hide counter details</string>
 </resources>

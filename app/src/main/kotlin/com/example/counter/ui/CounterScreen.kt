@@ -52,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -88,14 +90,18 @@ fun CounterApp(
                     if (state.counters.isNotEmpty()) {
                         IconButton(
                             onClick = { showDeleteAllDialog = true },
-                            enabled = !state.isDeletingAll
+                            enabled = !state.isDeletingAll && !state.isCreating &&
+                                state.busyCounterIds.isEmpty()
                         ) {
                             Icon(
                                 Icons.Filled.Delete,
                                 contentDescription = stringResource(R.string.delete_all_counters)
                             )
                         }
-                        IconButton(onClick = { showCreateDialog = true }) {
+                        IconButton(
+                            onClick = { showCreateDialog = true },
+                            enabled = !state.isDeletingAll
+                        ) {
                             Icon(
                                 Icons.Filled.Add,
                                 contentDescription = stringResource(R.string.create_counter)
@@ -262,7 +268,9 @@ fun CounterCard(
     var showResetDialog by rememberSaveable(counter.id) { mutableStateOf(false) }
 
     Card(
-        modifier = modifier.fillMaxWidth().clickable(enabled = !isSelected) { onClick() },
+        modifier = modifier.fillMaxWidth()
+            .semantics { selected = isSelected }
+            .clickable(enabled = !isSelected) { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surface
@@ -300,7 +308,10 @@ fun CounterCard(
                 IconButton(onClick = { showDetails = !showDetails }) {
                     Icon(
                         Icons.Filled.Info,
-                        contentDescription = stringResource(R.string.counter_details)
+                        contentDescription = stringResource(
+                            if (showDetails) R.string.counter_details_collapse
+                            else R.string.counter_details_expand
+                        )
                     )
                 }
             }
