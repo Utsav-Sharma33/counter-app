@@ -229,7 +229,7 @@ The app requires the following permissions:
 
 - `POST_NOTIFICATIONS` (Android 13+): To display lock screen notifications
 
-These are automatically handled by the system on Android 13+.
+The app requests this permission when notification tracking is enabled on Android 13 and newer. Users can also revoke it later in system settings.
 
 ## State Management Details
 
@@ -314,7 +314,7 @@ Unit and instrumentation test cases are present in the repository, but they have
 ### Runtime Issues
 
 1. **Notifications not showing**: Check notification permission in Settings
-2. **Database errors**: Reinstall app (data will be lost)
+2. **Database errors**: Check the app logs and preserve the app data before attempting recovery or reinstalling.
 3. **State lost on rotation**: ViewModel automatically handles this
 
 ### Installation Issues
