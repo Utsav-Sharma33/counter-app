@@ -102,8 +102,9 @@ class CounterRepository(private val counterDao: CounterDao) {
         val normalizedName = CounterNamePolicy.normalize(trimmedName)
 
         return try {
-            val current = counterDao.getCounterById(id)
-                ?: return CounterResult.Failure(CounterFailure.COUNTER_NOT_FOUND)
+            if (counterDao.getCounterById(id) == null) {
+                return CounterResult.Failure(CounterFailure.COUNTER_NOT_FOUND)
+            }
             val duplicate = counterDao.getCounterByNormalizedName(normalizedName)
             if (duplicate != null && duplicate.id != id) {
                 return CounterResult.Failure(CounterFailure.DUPLICATE_NAME)

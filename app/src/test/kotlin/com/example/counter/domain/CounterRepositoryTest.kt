@@ -4,6 +4,7 @@ import com.example.counter.data.CounterDao
 import com.example.counter.data.CounterEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -96,6 +97,16 @@ class CounterRepositoryTest {
             (result as CounterResult.Failure).reason
         )
         assertEquals(0, dao.getCounterByIdOnce(1)?.count)
+    }
+
+    @Test
+    fun setNegativeValueIsRejected() = runBlocking {
+        val result = repository.setCounterValue(1, -1)
+
+        assertEquals(
+            CounterFailure.INVALID_COUNT,
+            (result as CounterResult.Failure).reason
+        )
     }
 
     @Test
