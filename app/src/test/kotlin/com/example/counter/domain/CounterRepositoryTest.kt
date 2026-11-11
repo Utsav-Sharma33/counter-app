@@ -119,13 +119,140 @@ class CounterRepositoryTest {
         )
     }
 
+
+    @Test
+    fun renameTrimsNameAndAllowsKeepingOwnNormalizedName() = runBlocking {
+        repository.createCounter("Water")
+
+        val result = repository.renameCounter(1, "  WATER  ")
+
+        assertTrue(result is CounterResult.Success)
+        assertEquals("WATER", dao.getCounterByIdOnce(1)?.name)
+        assertEquals("water", dao.getCounterByIdOnce(1)?.normalizedName)
+    }
+
+    @Test
+    fun renameRejectsInvalidAndMissingCounter() = runBlocking {
+        assertEquals(
+            CounterFailure.INVALID_NAME,
+            (repository.renameCounter(1, " ") as CounterResult.Failure).reason
+        )
+        assertEquals(
+            CounterFailure.NAME_TOO_LONG,
+            (repository.renameCounter(1, "x".repeat(CounterNamePolicy.MAX_LENGTH + 1))
+                as CounterResult.Failure).reason
+        )
+        assertEquals(
+            CounterFailure.COUNTER_NOT_FOUND,
+            (repository.renameCounter(404, "New name") as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun incrementAndDecrementUpdateExistingCounter() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Steps", count = 2))
+
+        assertTrue(repository.incrementCounter(1) is CounterResult.Success)
+        assertEquals(3, dao.getCounterByIdOnce(1)?.count)
+        assertTrue(repository.decrementCounter(1) is CounterResult.Success)
+        assertEquals(2, dao.getCounterByIdOnce(1)?.count)
+    }
+
+    @Test
+    fun incrementAndDecrementReportMissingCounter() = runBlocking {
+        assertEquals(
+            CounterFailure.COUNTER_NOT_FOUND,
+            (repository.incrementCounter(404) as CounterResult.Failure).reason
+        )
+        assertEquals(
+            CounterFailure.COUNTER_NOT_FOUND,
+            (repository.decrementCounter(404) as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun setCounterValueUpdatesExistingCounterAndRejectsMissingCounter() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Steps", count = 1))
+
+        assertTrue(repository.setCounterValue(1, 15) is CounterResult.Success)
+        assertEquals(15, dao.getCounterByIdOnce(1)?.count)
+        assertEquals(
+            CounterFailure.COUNTER_NOT_FOUND,
+            (repository.setCounterValue(404, 15) as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun resetCounterSetsExistingValueToZero() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Steps", count = 9))
+
+        assertTrue(repository.resetCounter(1) is CounterResult.Success)
+        assertEquals(0, dao.getCounterByIdOnce(1)?.count)
+    }
+
+    @Test
+    fun deleteCounterReportsSuccessAndMissingRows() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Water"))
+
+        assertTrue(repository.deleteCounter(1) is CounterResult.Success)
+        assertEquals(
+            CounterFailure.COUNTER_NOT_FOUND,
+            (repository.deleteCounter(1) as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun deleteAllCountersClearsRows() = runBlocking {
+        dao.insertCounter(CounterEntity(id = 1, name = "Water"))
+        dao.insertCounter(CounterEntity(id = 2, name = "Steps"))
+
+        assertTrue(repository.deleteAllCounters() is CounterResult.Success)
+        assertTrue(dao.rows.value.isEmpty())
+    }
+
+    @Test
+    fun storageExceptionsBecomeTypedFailures() = runBlocking {
+        dao.failure = IllegalStateException("database unavailable")
+
+        assertEquals(
+            CounterFailure.STORAGE_ERROR,
+            (repository.createCounter("Water") as CounterResult.Failure).reason
+        )
+        assertEquals(
+            CounterFailure.STORAGE_ERROR,
+            (repository.incrementCounter(1) as CounterResult.Failure).reason
+        )
+        assertEquals(
+            CounterFailure.STORAGE_ERROR,
+            (repository.renameCounter(1, "New") as CounterResult.Failure).reason
+        )
+    }
+
+    @Test
+    fun cancellationIsNeverConvertedToStorageFailure() = runBlocking {
+        dao.failure = kotlinx.coroutines.CancellationException("cancelled")
+
+        var propagated = false
+        try {
+            repository.createCounter("Water")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            propagated = true
+        }
+
+        assertTrue(propagated)
+    }
+
     private class FakeCounterDao : CounterDao {
         val rows = MutableStateFlow<List<CounterEntity>>(emptyList())
         private var nextId = 1
+        var failure: Exception? = null
+
+        private fun throwIfConfigured() { failure?.let { throw it } }
 
         fun getCounterByIdOnce(id: Int): CounterEntity? = rows.value.firstOrNull { it.id == id }
 
         override suspend fun insertCounter(counter: CounterEntity): Long {
+            throwIfConfigured()
             val id = if (counter.id == 0) nextId++ else counter.id
             rows.value = rows.value + counter.copy(id = id)
             return id.toLong()
@@ -140,24 +267,31 @@ class CounterRepositoryTest {
         }
 
         override suspend fun deleteCounterById(id: Int): Int {
+            throwIfConfigured()
             val before = rows.value.size
             rows.value = rows.value.filterNot { it.id == id }
             return before - rows.value.size
         }
 
-        override suspend fun getCounterById(id: Int): CounterEntity? = getCounterByIdOnce(id)
+        override suspend fun getCounterById(id: Int): CounterEntity? {
+            throwIfConfigured()
+            return getCounterByIdOnce(id)
+        }
 
         override fun getCounterByIdFlow(id: Int): Flow<CounterEntity?> =
             rows.map { list -> list.firstOrNull { it.id == id } }
 
-        override suspend fun getCounterByNormalizedName(normalizedName: String): CounterEntity? =
-            rows.value.firstOrNull { it.normalizedName == normalizedName }
+        override suspend fun getCounterByNormalizedName(normalizedName: String): CounterEntity? {
+            throwIfConfigured()
+            return rows.value.firstOrNull { it.normalizedName == normalizedName }
+        }
 
         override fun getAllCounters(): Flow<List<CounterEntity>> = rows
 
         override suspend fun getAllCountersOnce(): List<CounterEntity> = rows.value
 
         override suspend fun incrementCounter(id: Int, timestamp: Long): Int {
+            throwIfConfigured()
             val current = getCounterByIdOnce(id) ?: return 0
             if (current.count == Int.MAX_VALUE) return 0
             rows.value = rows.value.map {
@@ -167,6 +301,7 @@ class CounterRepositoryTest {
         }
 
         override suspend fun decrementCounter(id: Int, timestamp: Long): Int {
+            throwIfConfigured()
             val current = getCounterByIdOnce(id) ?: return 0
             if (current.count <= 0) return 0
             rows.value = rows.value.map {
@@ -176,6 +311,7 @@ class CounterRepositoryTest {
         }
 
         override suspend fun setCounterValue(id: Int, newCount: Int, timestamp: Long): Int {
+            throwIfConfigured()
             if (newCount < 0 || getCounterByIdOnce(id) == null) return 0
             rows.value = rows.value.map {
                 if (it.id == id) it.copy(count = newCount, updatedAt = timestamp) else it
@@ -187,6 +323,7 @@ class CounterRepositoryTest {
             setCounterValue(id, 0, timestamp)
 
         override suspend fun deleteAllCounters() {
+            throwIfConfigured()
             rows.value = emptyList()
         }
 
@@ -196,6 +333,7 @@ class CounterRepositoryTest {
             normalizedName: String,
             timestamp: Long
         ): Int {
+            throwIfConfigured()
             if (rows.value.any { it.id != id && it.normalizedName == normalizedName }) return 0
             if (getCounterByIdOnce(id) == null) return 0
             rows.value = rows.value.map {
