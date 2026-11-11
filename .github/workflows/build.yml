@@ -11,11 +11,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  build:
-    name: Lint, test, and build
+  build-and-test:
+    name: Lint, JVM tests, coverage, and emulator tests
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - name: Checkout source
@@ -38,7 +42,7 @@ jobs:
         with:
           gradle-version: "8.14"
 
-      # The repository intentionally generates wrapper files in the runner workspace.
+      # Wrapper files are intentionally generated in the runner workspace.
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14 --distribution-type bin
 
@@ -48,13 +52,23 @@ jobs:
           ./gradlew --version
 
       - name: Run Android lint
-        run: ./gradlew lint
+        run: ./gradlew :app:lintDebug
 
-      - name: Run JVM unit tests
-        run: ./gradlew test
+      - name: Run JVM unit tests and generate JaCoCo report
+        run: ./gradlew :app:testDebugUnitTest :app:jacocoTestReport
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew :app:assembleDebug
+
+      - name: Run Room and Compose instrumentation tests with coverage
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: ./gradlew :app:createDebugCoverageReport
 
       - name: Upload debug APK
         if: success()
@@ -63,6 +77,19 @@ jobs:
           name: debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload lint, test, and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-validation-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/code_coverage/
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Validate release tag and signing secrets
@@ -94,7 +121,7 @@ jobs:
 
       - name: Build signed minified release APK
         if: startsWith(github.ref, 'refs/tags/v')
-        run: ./gradlew assembleRelease -PAPP_VERSION_NAME="$APP_VERSION_NAME" -PAPP_VERSION_CODE="$APP_VERSION_CODE"
+        run: ./gradlew :app:assembleRelease -PAPP_VERSION_NAME="$APP_VERSION_NAME" -PAPP_VERSION_CODE="$APP_VERSION_CODE"
 
       - name: Verify release APK signature
         if: startsWith(github.ref, 'refs/tags/v')
@@ -117,7 +144,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
       contents: write
