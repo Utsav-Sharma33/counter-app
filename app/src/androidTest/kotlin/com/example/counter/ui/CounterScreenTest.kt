@@ -1,6 +1,7 @@
 package com.example.counter.ui
 
 import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -35,6 +36,20 @@ class CounterScreenTest {
     fun setUp() {
         dataSource = FakeCounterDataSource()
         viewModel = CounterViewModel(dataSource, FakeNotificationController())
+    }
+
+
+    @Test
+    fun selectedCounterCardExposesSelectedSemantics() {
+        showCounters(
+            CounterEntity(id = 1, name = "Water"),
+            CounterEntity(id = 2, name = "Steps")
+        )
+
+        composeRule.onNodeWithText("Water").performClick()
+        composeRule.onNodeWithText("Water").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Increment").assertExists()
+        composeRule.onNodeWithContentDescription("Decrement").assertExists()
     }
 
     @Test
