@@ -202,6 +202,8 @@ Acceptance:
 
 ### Phase 4 — ViewModel and Compose architecture
 
+**Implementation status (2026-11-11):** The ViewModel now exposes a read-only immutable UI state, uses an injectable repository data-source contract and notification controller, tracks per-counter operation state, prevents duplicate in-flight actions, preserves coroutine cancellation, and clears selection when a counter disappears. Compose screens use lifecycle-aware collection and callback-driven child components, stable lazy-list keys, accessible control descriptions and selection semantics, saveable dialog state, snackbar error feedback, and confirmations for reset/delete. Static light/dark fallback palettes were adjusted for stronger contrast. ViewModel unit tests and Compose workflow instrumentation tests cover load, selection, duplicate actions, create, rename, increment, decrement, reset, delete, delete-all, and error feedback. Compilation, test execution, TalkBack, font-scale, and physical-device validation remain pending; CI has not been run.
+
 **Implementation status (2026-11-11):** The ViewModel now exposes a single immutable UI state, uses an injectable data-source contract and notification controller, isolates per-counter operation state, prevents duplicate in-flight actions, preserves coroutine cancellation, and clears stale selection. Compose screens use lifecycle-aware state collection and callbacks, stable list keys, accessible icon labels, visible snackbars, and confirmation dialogs for reset/delete. ViewModel unit tests and Compose workflow instrumentation tests have been added. Test execution, compilation, TalkBack, font-scale, and physical-device layout validation remain pending; CI has not been run.
 
 #### 4.1 ViewModel state and operation handling
