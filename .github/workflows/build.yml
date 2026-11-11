@@ -33,14 +33,14 @@ jobs:
       - name: Install Android 16 SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Set up Gradle 8.14.4
+      - name: Set up Gradle 8.14
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.14.4"
+          gradle-version: "8.14"
 
       # The repository intentionally generates wrapper files in the runner workspace.
       - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.14.4 --distribution-type bin
+        run: gradle wrapper --gradle-version 8.14 --distribution-type bin
 
       - name: Verify Gradle wrapper
         run: |
