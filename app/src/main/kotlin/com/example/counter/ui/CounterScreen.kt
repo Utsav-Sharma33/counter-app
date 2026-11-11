@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -56,11 +57,15 @@ import androidx.compose.ui.unit.sp
 import com.example.counter.data.CounterEntity
 
 @Composable
-fun CounterApp(viewModel: CounterViewModel) {
+fun CounterApp(
+    viewModel: CounterViewModel,
+    onRequestTrackingPermission: (Int) -> Unit
+) {
     val counters by viewModel.counters.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val selectedCounterId by viewModel.selectedCounterId.collectAsState()
+    val trackedCounterIds by viewModel.trackedCounterIds.collectAsState()
     
     var showCreateDialog by remember { mutableStateOf(false) }
     
@@ -123,9 +128,14 @@ fun CounterApp(viewModel: CounterViewModel) {
                 CounterListScreen(
                     counters = counters,
                     selectedCounterId = selectedCounterId,
+                    trackedCounterIds = trackedCounterIds,
                     modifier = Modifier.padding(paddingValues),
                     onCounterClick = { viewModel.selectCounter(it.id) },
                     onAddClick = { showCreateDialog = true },
+                    onTrackingToggle = { id, isTracked ->
+                        if (isTracked) viewModel.setTrackingEnabled(id, false)
+                        else onRequestTrackingPermission(id)
+                    },
                     viewModel = viewModel
                 )
             }
@@ -204,9 +214,11 @@ fun EmptyStateScreen(modifier: Modifier = Modifier, onAddClick: () -> Unit) {
 fun CounterListScreen(
     counters: List<CounterEntity>,
     selectedCounterId: Int?,
+    trackedCounterIds: Set<Int>,
     modifier: Modifier = Modifier,
     onCounterClick: (CounterEntity) -> Unit,
     onAddClick: () -> Unit,
+    onTrackingToggle: (Int, Boolean) -> Unit,
     viewModel: CounterViewModel
 ) {
     LazyColumn(
@@ -216,15 +228,17 @@ fun CounterListScreen(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(counters) { counter ->
+        items(counters, key = CounterEntity::id) { counter ->
             CounterCard(
                 counter = counter,
                 isSelected = selectedCounterId == counter.id,
+                isTracked = counter.id in trackedCounterIds,
                 onClick = { onCounterClick(counter) },
                 onIncrementClick = { viewModel.incrementCounter(counter.id) },
                 onDecrementClick = { viewModel.decrementCounter(counter.id) },
                 onDeleteClick = { viewModel.deleteCounter(counter) },
                 onResetClick = { viewModel.resetCounter(counter.id) },
+                onTrackingToggle = { onTrackingToggle(counter.id, counter.id in trackedCounterIds) },
                 viewModel = viewModel
             )
         }
@@ -238,11 +252,13 @@ fun CounterListScreen(
 fun CounterCard(
     counter: CounterEntity,
     isSelected: Boolean,
+    isTracked: Boolean,
     onClick: () -> Unit,
     onIncrementClick: () -> Unit,
     onDecrementClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onResetClick: () -> Unit,
+    onTrackingToggle: () -> Unit,
     viewModel: CounterViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -326,8 +342,12 @@ fun CounterCard(
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
+            TextButton(onClick = onTrackingToggle, modifier = Modifier.fillMaxWidth()) {
+                Text(if (isTracked) "Stop notification tracking" else "Track in notification")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Control buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),

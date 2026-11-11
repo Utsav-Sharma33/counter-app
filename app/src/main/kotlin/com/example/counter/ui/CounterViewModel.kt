@@ -1,5 +1,6 @@
 package com.example.counter.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -7,36 +8,38 @@ import com.example.counter.data.CounterEntity
 import com.example.counter.domain.CounterFailure
 import com.example.counter.domain.CounterRepository
 import com.example.counter.domain.CounterResult
+import com.example.counter.notification.CounterNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class CounterViewModel(private val repository: CounterRepository) : ViewModel() {
-
+class CounterViewModel(private val repository: CounterRepository, context: Context) : ViewModel() {
+    private val appContext = context.applicationContext
     private val _counters = MutableStateFlow<List<CounterEntity>>(emptyList())
     val counters: StateFlow<List<CounterEntity>> = _counters.asStateFlow()
-
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
     private val _selectedCounterId = MutableStateFlow<Int?>(null)
     val selectedCounterId: StateFlow<Int?> = _selectedCounterId.asStateFlow()
+    private val _trackedCounterIds = MutableStateFlow(
+        CounterNotificationManager.getTrackedCounterIds(appContext)
+    )
+    val trackedCounterIds: StateFlow<Set<Int>> = _trackedCounterIds.asStateFlow()
 
-    init {
-        loadCounters()
-    }
+    init { loadCounters() }
 
     private fun loadCounters() {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.getAllCounters().collect { countersList ->
-                    _counters.value = countersList
+                repository.getAllCounters().collect { list ->
+                    _counters.value = list
                     _isLoading.value = false
+                    CounterNotificationManager.syncTrackedCounters(appContext, list)
+                    _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
                 }
             } catch (exception: Exception) {
                 handleError("Failed to load counters")
@@ -62,9 +65,9 @@ class CounterViewModel(private val repository: CounterRepository) : ViewModel() 
         viewModelScope.launch {
             when (val result = repository.deleteCounter(counter)) {
                 is CounterResult.Success -> {
-                    if (_selectedCounterId.value == counter.id) {
-                        _selectedCounterId.value = null
-                    }
+                    CounterNotificationManager.removeTrackedCounter(appContext, counter.id)
+                    _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
+                    if (_selectedCounterId.value == counter.id) _selectedCounterId.value = null
                     clearError()
                 }
                 is CounterResult.Failure -> handleFailure(result.reason)
@@ -72,34 +75,43 @@ class CounterViewModel(private val repository: CounterRepository) : ViewModel() 
         }
     }
 
-    fun incrementCounter(counterId: Int) = runMutation {
-        repository.incrementCounter(counterId)
+    fun incrementCounter(id: Int) = runMutation(id) { repository.incrementCounter(id) }
+    fun decrementCounter(id: Int) = runMutation(id) { repository.decrementCounter(id) }
+    fun resetCounter(id: Int) = runMutation(id) { repository.resetCounter(id) }
+    fun setCounterValue(id: Int, value: Int) = runMutation(id) { repository.setCounterValue(id, value) }
+    fun renameCounter(id: Int, newName: String) = runMutation(id) { repository.renameCounter(id, newName) }
+
+    fun setTrackingEnabled(id: Int, enabled: Boolean) {
+        viewModelScope.launch {
+            if (enabled) {
+                val counter = try {
+                    repository.getCounterByIdOnce(id)
+                } catch (exception: Exception) {
+                    handleError("Unable to enable notification tracking")
+                    return@launch
+                }
+                if (counter == null) {
+                    handleFailure(CounterFailure.COUNTER_NOT_FOUND)
+                    return@launch
+                }
+                CounterNotificationManager.enableTracking(appContext, id)
+                CounterNotificationManager.syncCounterIfTracked(appContext, counter)
+            } else {
+                CounterNotificationManager.removeTrackedCounter(appContext, id)
+            }
+            _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
+            clearError()
+        }
     }
 
-    fun decrementCounter(counterId: Int) = runMutation {
-        repository.decrementCounter(counterId)
-    }
-
-    fun resetCounter(counterId: Int) = runMutation {
-        repository.resetCounter(counterId)
-    }
-
-    fun setCounterValue(counterId: Int, value: Int) = runMutation {
-        repository.setCounterValue(counterId, value)
-    }
-
-    fun renameCounter(counterId: Int, newName: String) = runMutation {
-        repository.renameCounter(counterId, newName)
-    }
-
-    fun selectCounter(counterId: Int?) {
-        _selectedCounterId.value = counterId
-    }
+    fun selectCounter(id: Int?) { _selectedCounterId.value = id }
 
     fun deleteAllCounters() {
         viewModelScope.launch {
             when (val result = repository.deleteAllCounters()) {
                 is CounterResult.Success -> {
+                    CounterNotificationManager.clearTrackedCounters(appContext)
+                    _trackedCounterIds.value = emptySet()
                     _selectedCounterId.value = null
                     clearError()
                 }
@@ -110,12 +122,28 @@ class CounterViewModel(private val repository: CounterRepository) : ViewModel() 
 
     fun getCounterById(id: Int): CounterEntity? = _counters.value.find { it.id == id }
 
-    private fun runMutation(operation: suspend () -> CounterResult<Unit>) {
+    private fun runMutation(id: Int, operation: suspend () -> CounterResult<Unit>) {
         viewModelScope.launch {
             when (val result = operation()) {
-                is CounterResult.Success -> clearError()
-                is CounterResult.Failure -> handleFailure(result.reason)
+                is CounterResult.Success -> {
+                    syncTrackedCounter(id)
+                    clearError()
+                }
+                is CounterResult.Failure -> {
+                    syncTrackedCounter(id)
+                    handleFailure(result.reason)
+                }
             }
+        }
+    }
+
+    private suspend fun syncTrackedCounter(id: Int) {
+        val counter = try { repository.getCounterByIdOnce(id) } catch (exception: Exception) { return }
+        if (counter == null) {
+            CounterNotificationManager.removeTrackedCounter(appContext, id)
+            _trackedCounterIds.value = CounterNotificationManager.getTrackedCounterIds(appContext)
+        } else {
+            CounterNotificationManager.syncCounterIfTracked(appContext, counter)
         }
     }
 
@@ -138,16 +166,17 @@ class CounterViewModel(private val repository: CounterRepository) : ViewModel() 
         _isLoading.value = false
     }
 
-    fun clearError() {
-        _errorMessage.value = null
-    }
+    fun clearError() { _errorMessage.value = null }
 }
 
-class CounterViewModelFactory(private val repository: CounterRepository) : ViewModelProvider.Factory {
+class CounterViewModelFactory(
+    private val repository: CounterRepository,
+    private val context: Context
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(CounterViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return CounterViewModel(repository) as T
+            return CounterViewModel(repository, context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

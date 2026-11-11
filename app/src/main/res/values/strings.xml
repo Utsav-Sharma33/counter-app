@@ -20,4 +20,9 @@
     <string name="created">Created</string>
     <string name="updated">Updated</string>
     <string name="details">Details</string>
+    <string name="counter_notification_channel_name">Counter tracking</string>
+    <string name="counter_notification_channel_description">Live notifications for counters you choose to track</string>
+    <string name="counter_notification_count">Current count: %1$d</string>
+    <string name="counter_notification_increment">Increase counter</string>
+    <string name="counter_notification_decrement">Decrease counter</string>
 </resources>

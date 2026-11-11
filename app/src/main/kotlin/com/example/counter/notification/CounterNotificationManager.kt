@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -13,122 +14,129 @@ import com.example.counter.R
 import com.example.counter.data.CounterEntity
 
 object CounterNotificationManager {
-    
     private const val CHANNEL_ID = "counter_notifications"
-    private const val NOTIFICATION_ID_BASE = 1000
-    private const val ACTION_INCREMENT = "ACTION_INCREMENT"
-    private const val ACTION_DECREMENT = "ACTION_DECREMENT"
-    private const val EXTRA_COUNTER_ID = "counter_id"
-    
+    private const val TRACKING_PREFERENCES = "counter_notification_tracking"
+    private const val TRACKED_COUNTER_IDS = "tracked_counter_ids"
+
     fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Counter Notifications"
-            val descriptionText = "Notifications for counter app"
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
-                description = descriptionText
-            }
-            
-            val notificationManager: NotificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.counter_notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = context.getString(R.string.counter_notification_channel_description)
+        }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
+    }
+
+    fun getTrackedCounterIds(context: Context): Set<Int> =
+        preferences(context).getStringSet(TRACKED_COUNTER_IDS, emptySet())
+            .orEmpty().mapNotNull(String::toIntOrNull).filter { it > 0 }.toSet()
+
+    fun enableTracking(context: Context, counterId: Int) {
+        if (counterId <= 0) return
+        val ids = getTrackedCounterIds(context) + counterId
+        preferences(context).edit()
+            .putStringSet(TRACKED_COUNTER_IDS, ids.map(Int::toString).toSet()).apply()
+    }
+
+    fun removeTrackedCounter(context: Context, counterId: Int) {
+        if (counterId <= 0) return
+        val ids = getTrackedCounterIds(context) - counterId
+        preferences(context).edit()
+            .putStringSet(TRACKED_COUNTER_IDS, ids.map(Int::toString).toSet()).apply()
+        dismissCounterNotification(context, counterId)
+    }
+
+    fun clearTrackedCounters(context: Context) {
+        getTrackedCounterIds(context).forEach { dismissCounterNotification(context, it) }
+        preferences(context).edit().remove(TRACKED_COUNTER_IDS).apply()
+    }
+
+    fun syncCounterIfTracked(context: Context, counter: CounterEntity) {
+        if (counter.id in getTrackedCounterIds(context)) showCounterNotification(context, counter)
+    }
+
+    fun syncTrackedCounters(context: Context, counters: List<CounterEntity>) {
+        val countersById = counters.associateBy(CounterEntity::id)
+        getTrackedCounterIds(context).forEach { counterId ->
+            val counter = countersById[counterId]
+            if (counter == null) removeTrackedCounter(context, counterId)
+            else showCounterNotification(context, counter)
         }
     }
-    
-    fun showCounterNotification(context: Context, counter: CounterEntity) {
+
+    private fun showCounterNotification(context: Context, counter: CounterEntity) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         createNotificationChannel(context)
-        
-        // Intent to open app
-        val intent = Intent(context, MainActivity::class.java).apply {
+
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("counter_id", counter.id)
+            data = Uri.parse("counter-app://counter/${counter.id}")
+            putExtra(CounterActionReceiver.EXTRA_COUNTER_ID, counter.id)
         }
-        
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(
-            context, 
-            counter.id, 
-            intent,
+        val contentPendingIntent = PendingIntent.getActivity(
+            context, counter.id, contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
-        // Increment action
-        val incrementIntent = Intent(context, CounterActionReceiver::class.java).apply {
-            action = ACTION_INCREMENT
-            putExtra(EXTRA_COUNTER_ID, counter.id)
-        }
-        
-        val incrementPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-            context,
-            counter.id * 1000,
-            incrementIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val incrementPendingIntent = actionIntent(
+            context, CounterActionReceiver.ACTION_INCREMENT, counter.id
         )
-        
-        // Decrement action
-        val decrementIntent = Intent(context, CounterActionReceiver::class.java).apply {
-            action = ACTION_DECREMENT
-            putExtra(EXTRA_COUNTER_ID, counter.id)
-        }
-        
-        val decrementPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-            context,
-            (counter.id * 1000) + 1,
-            decrementIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val decrementPendingIntent = actionIntent(
+            context, CounterActionReceiver.ACTION_DECREMENT, counter.id
         )
-        
+
+        val countText = context.getString(R.string.counter_notification_count, counter.count)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_counter)
             .setContentTitle(counter.name)
-            .setContentText("Count: ${counter.count}")
-            .setContentIntent(pendingIntent)
+            .setContentText(countText)
+            .setContentIntent(contentPendingIntent)
             .setAutoCancel(false)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .addAction(
                 R.drawable.ic_minus,
-                "−",
+                context.getString(R.string.counter_notification_decrement),
                 decrementPendingIntent
             )
             .addAction(
                 R.drawable.ic_plus,
-                "+",
+                context.getString(R.string.counter_notification_increment),
                 incrementPendingIntent
             )
-            .setStyle(NotificationCompat.BigTextStyle()
-                .setBigContentTitle(counter.name)
-                .bigText("Current count: ${counter.count}")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .setBigContentTitle(counter.name)
+                    .bigText(countText)
             )
             .build()
-        
-        // Use try-catch for notification posting to handle edge cases
+
         try {
-            with(NotificationManagerCompat.from(context)) {
-                notify(NOTIFICATION_ID_BASE + counter.id, notification)
-            }
-        } catch (e: SecurityException) {
-            // Handle case where notification permission is not granted
-            e.printStackTrace()
+            NotificationManagerCompat.from(context).notify(counter.id, notification)
+        } catch (_: SecurityException) {
+            // Permission may be revoked between the permission check and notify().
         }
     }
-    
-    fun dismissCounterNotification(context: Context, counterId: Int) {
-        try {
-            with(NotificationManagerCompat.from(context)) {
-                cancel(NOTIFICATION_ID_BASE + counterId)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+    private fun actionIntent(context: Context, action: String, counterId: Int): PendingIntent {
+        val intent = Intent(context, CounterActionReceiver::class.java).apply {
+            this.action = action
+            putExtra(CounterActionReceiver.EXTRA_COUNTER_ID, counterId)
         }
+        return PendingIntent.getBroadcast(
+            context, counterId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
-    
-    fun dismissAllNotifications(context: Context) {
-        try {
-            with(NotificationManagerCompat.from(context)) {
-                cancelAll()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+
+    private fun dismissCounterNotification(context: Context, counterId: Int) {
+        NotificationManagerCompat.from(context).cancel(counterId)
     }
+
+    private fun preferences(context: Context) =
+        context.getSharedPreferences(TRACKING_PREFERENCES, Context.MODE_PRIVATE)
 }
