@@ -129,6 +129,74 @@ class CounterViewModelTest {
         assertTrue(viewModel.uiState.value.busyCounterIds.isEmpty())
     }
 
+
+    @Test
+    fun deleteAllClearsSelectionAndTrackingState() = runTest(mainDispatcherRule.dispatcher) {
+        val data = FakeCounterDataSource()
+        data.rows.value = listOf(counter(1, "Water"))
+        val notifications = FakeNotificationController()
+        notifications.enableTracking(1)
+        val viewModel = CounterViewModel(data, notifications)
+        runCurrent()
+        viewModel.selectCounter(1)
+
+        viewModel.deleteAllCounters()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedCounterId)
+        assertTrue(viewModel.uiState.value.trackedCounterIds.isEmpty())
+        assertTrue(data.rows.value.isEmpty())
+        assertFalse(viewModel.uiState.value.isDeletingAll)
+    }
+
+    @Test
+    fun enablingTrackingForMissingCounterShowsDomainMessage() = runTest(mainDispatcherRule.dispatcher) {
+        val data = FakeCounterDataSource()
+        val viewModel = createViewModel(data)
+        runCurrent()
+
+        viewModel.setTrackingEnabled(404, true)
+        advanceUntilIdle()
+
+        assertEquals("This counter no longer exists.", viewModel.uiState.value.errorMessage)
+        assertTrue(viewModel.uiState.value.trackedCounterIds.isEmpty())
+        assertTrue(viewModel.uiState.value.busyCounterIds.isEmpty())
+    }
+
+    @Test
+    fun clearErrorRemovesPreviouslyPublishedMessage() = runTest(mainDispatcherRule.dispatcher) {
+        val data = FakeCounterDataSource()
+        data.incrementResult = CounterResult.Failure(CounterFailure.INVALID_COUNT)
+        data.rows.value = listOf(counter(1, "Steps"))
+        val viewModel = createViewModel(data)
+        runCurrent()
+
+        viewModel.incrementCounter(1)
+        advanceUntilIdle()
+        assertEquals("Counter value cannot be negative.", viewModel.uiState.value.errorMessage)
+
+        viewModel.clearError()
+
+        assertNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun createFailureClearsLoadingAndPublishesSafeMessage() = runTest(mainDispatcherRule.dispatcher) {
+        val data = FakeCounterDataSource()
+        data.createResult = CounterResult.Failure(CounterFailure.DUPLICATE_NAME)
+        val viewModel = createViewModel(data)
+        runCurrent()
+
+        viewModel.createCounter("Steps")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isCreating)
+        assertEquals(
+            "A counter with this name already exists.",
+            viewModel.uiState.value.errorMessage
+        )
+    }
+
     private fun createViewModel(data: FakeCounterDataSource) =
         CounterViewModel(data, FakeNotificationController())
 
@@ -153,8 +221,10 @@ class CounterViewModelTest {
             return createGate?.await() ?: createResult
         }
 
-        override suspend fun deleteCounter(id: Int): CounterResult<Unit> =
-            CounterResult.Success(Unit)
+        override suspend fun deleteCounter(id: Int): CounterResult<Unit> {
+            rows.value = rows.value.filterNot { it.id == id }
+            return CounterResult.Success(Unit)
+        }
         override suspend fun incrementCounter(id: Int): CounterResult<Unit> {
             incrementCalls++
             return incrementGate?.await() ?: incrementResult
@@ -167,8 +237,10 @@ class CounterViewModelTest {
             CounterResult.Success(Unit)
         override suspend fun renameCounter(id: Int, newName: String): CounterResult<Unit> =
             CounterResult.Success(Unit)
-        override suspend fun deleteAllCounters(): CounterResult<Unit> =
-            CounterResult.Success(Unit)
+        override suspend fun deleteAllCounters(): CounterResult<Unit> {
+            rows.value = emptyList()
+            return CounterResult.Success(Unit)
+        }
     }
 
     private class FakeNotificationController : CounterNotificationController {
