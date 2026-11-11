@@ -274,6 +274,11 @@ Acceptance:
 
 ### Phase 6 — Release and operational readiness
 
+**Implementation status (2026-11-11):** Release signing now reads the keystore path and credentials only from environment variables; no keystore or signing values are stored in the repository. Tag builds require all four signing secrets, validate semantic version tags, create a signed minified APK, and verify its APK signature before publishing a GitHub Release. Branch and pull-request builds produce debug artifacts only. Workflow permissions are read-only for build jobs, with `contents: write` granted only to the release-publishing job. The workflow now runs lint, JVM tests, and debug build as separate visible steps, and no longer prints a success message after failure. The Android toolchain was coordinated to AGP 8.10.1, Gradle 8.14, Kotlin/Compose plugin 2.2.21, JDK 17, and Android API 36. `compileSdk` and `targetSdk` are now 36. Unused DataStore, Timber, LiveData, duplicate Core and duplicate ViewModel dependencies were removed after source-use review; unused root library/JVM plugin declarations were removed. README release and signing instructions were updated.
+
+**Validation pending:** No Gradle sync/build, lint, unit/instrumentation tests, minified release build, APK signature verification, emulator/device smoke test, or actual GitHub Release has been run. The repository signing secrets and keystore have not been supplied or configured. R8 keep rules remain conservative pending a minified release test. API 36 edge-to-edge behavior and Android 16 runtime compatibility still require device verification. CI workflows have not been triggered.
+
+
 #### 6.1 Release build and signing
 **Files:** `app/build.gradle.kts`, `gradle.properties`, `.gitignore`, CI workflow and repository secret configuration
 
@@ -323,10 +328,10 @@ Acceptance:
 | File or path | Work required | Priority | Status |
 |---|---|---:|---|
 | `.github/workflows/build.yml` | Install pinned Gradle and generate wrapper before use | P0 | Implemented; CI intentionally not run |
-| `build.gradle.kts` | Align Kotlin/Compose plugin versions | P0 | Implemented; build validation pending |
-| `app/build.gradle.kts` | Compose compiler plugin configuration | P0 | Implemented; build validation pending |
-| `settings.gradle.kts` | Verify plugin and dependency repositories | P2 | [ ] |
-| `gradle.properties` | Review obsolete/unsupported flags | P2 | [ ] |
+| `build.gradle.kts` | Pin compatible AGP/Kotlin/Compose plugin versions | P0 | Updated to AGP 8.10.1 and Kotlin 2.2.21; build validation pending |
+| `app/build.gradle.kts` | API 36, secure environment-based signing, Compose plugin and JaCoCo | P0 | Implemented; signed/unsigned release build validation pending |
+| `settings.gradle.kts` | Verify plugin and dependency repositories | P2 | Reviewed; validation pending |
+| `gradle.properties` | Remove obsolete flags and keep supported settings | P2 | Implemented; configuration validation pending |
 | `app/src/main/res/xml/data_extraction_rules.xml` | Correct Android data extraction schema | P0 | Implemented; Android runtime validation pending |
 | `app/src/main/res/xml/backup_rules.xml` | Align legacy backup inclusion rules | P1 | Implemented; Android runtime validation pending |
 | `app/src/main/AndroidManifest.xml` | Notification permission, non-exported receiver, and singleTop activity deep link | P1 | Implemented; manifest/runtime validation pending |
@@ -343,8 +348,8 @@ Acceptance:
 | `res/values/strings.xml` | Notification and primary UI labels | P2 | Implemented; translation review pending |
 | `domain/CounterDataSource.kt` | ViewModel-facing repository contract | P1 | Implemented |
 | `notification/CounterNotificationController.kt`, `AndroidCounterNotificationController.kt` | Inject notification behavior outside ViewModel | P1 | Implemented |
-| `app/proguard-rules.pro` | Validate rules against minified release | P2 | [ ] |
-| `.github/workflows/build.yml` | Wrapper, tag trigger, permissions, truthful status | P2 | [ ] |
+| `app/proguard-rules.pro` | Validate Room/Kotlin keep rules against minified release | P2 | Conservative rules retained; minified release validation pending |
+| `.github/workflows/build.yml` | Wrapper, tag trigger, least privilege, signing, artifacts, truthful status | P2 | Implemented; workflow intentionally not run |
 | `app/src/test/**` | Repository and ViewModel unit tests | P0 | Expanded in Phase 5; execution and coverage measurement pending |
 | `app/src/androidTest/**` | Room migration, atomic DAO, uniqueness, and Compose workflow tests | P0 | Expanded in Phase 5; execution pending |
 
