@@ -106,9 +106,9 @@ counter/
 
 ## Technical Stack
 
-- **Language**: Kotlin 1.9.10
+- **Language**: Kotlin 2.2.21
 - **Minimum SDK**: 28 (Android 9.0)
-- **Target SDK**: 34 (Android 14)
+- **Compile SDK / Target SDK**: 36 (Android 16)
 - **Build System**: Gradle with Kotlin DSL
 - **UI Framework**: Jetpack Compose with Material Design 3
 - **Database**: Room Database with Kotlin Coroutines
@@ -154,7 +154,7 @@ org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3
    ./gradlew build
    ```
 
-4. **Run on emulator or device**
+5. **Run on emulator or device**
    - Connect an Android device or open an emulator
    - Click "Run" or use:
    ```bash
@@ -173,11 +173,31 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Release APK
 
+A local release build uses the signing environment variables below. If they are absent, Gradle can produce an unsigned release APK for local inspection, but it must not be distributed.
+
 ```bash
+export COUNTER_RELEASE_STORE_FILE="/secure/path/release-key.jks"
+export COUNTER_RELEASE_STORE_PASSWORD="..."
+export COUNTER_RELEASE_KEY_ALIAS="..."
+export COUNTER_RELEASE_KEY_PASSWORD="..."
 ./gradlew assembleRelease
 ```
 
-**Note**: For release builds, you'll need to configure signing. Create a `keystore.properties` file or configure signing in `build.gradle.kts`.
+Never put these values in source files, `gradle.properties`, shell scripts committed to Git, or build logs.
+
+### GitHub Release process
+
+- Push a semantic version tag such as `v1.2.3`.
+- Configure these repository Actions secrets before creating a release tag:
+  - `ANDROID_SIGNING_KEYSTORE_BASE64`: Base64-encoded Java keystore.
+  - `ANDROID_SIGNING_STORE_PASSWORD`
+  - `ANDROID_SIGNING_KEY_ALIAS`
+  - `ANDROID_SIGNING_KEY_PASSWORD`
+- The tag workflow validates all secrets, decodes the keystore into the runner's temporary directory, builds a minified signed release APK, verifies its signature, and publishes the APKs as a GitHub Release.
+- The workflow sets the Android `versionName` from the tag and uses the GitHub Actions run number as `versionCode`. The run number increases between workflow runs.
+- Branch and pull-request workflows build and upload the debug APK only. They do not publish releases.
+
+The keystore and passwords must never be committed. If a signing key is lost or compromised, follow the relevant app-signing key rotation process before publishing another update.
 
 ## Usage Guide
 
