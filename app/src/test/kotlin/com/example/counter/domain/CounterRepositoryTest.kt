@@ -137,7 +137,7 @@ class CounterRepositoryTest {
         override suspend fun getCounterById(id: Int): CounterEntity? = getCounterByIdOnce(id)
 
         override fun getCounterByIdFlow(id: Int): Flow<CounterEntity?> =
-            kotlinx.coroutines.flow.map(rows) { list -> list.firstOrNull { it.id == id } }
+            rows.map { list -> list.firstOrNull { it.id == id } }
 
         override suspend fun getCounterByNormalizedName(normalizedName: String): CounterEntity? =
             rows.value.firstOrNull { it.normalizedName == normalizedName }

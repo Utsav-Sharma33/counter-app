@@ -4,7 +4,7 @@
 **Target branch:** `main`  
 **Baseline commit:** `3bc35230994f45bb2634d4919cc17f39e4e27133`  
 **Audit date:** 2026-11-11  
-**Status:** Phase 1 implementation committed; build and Android runtime validation pending
+**Status:** Phase 1 and Phase 2 implementation committed; build and test execution pending
 
 ## Purpose
 
@@ -316,21 +316,21 @@ Acceptance:
 | `app/src/main/res/xml/data_extraction_rules.xml` | Correct Android data extraction schema | P0 | Implemented; Android runtime validation pending |
 | `app/src/main/res/xml/backup_rules.xml` | Align legacy backup inclusion rules | P1 | Implemented; Android runtime validation pending |
 | `app/src/main/AndroidManifest.xml` | Permission, receiver, backup and activity config | P1 | [ ] |
-| `data/CounterDatabase.kt` | Remove destructive fallback; schema export/migrations | P0 | [ ] |
-| `data/CounterEntity.kt` | Count/name constraints and schema decisions | P1 | [ ] |
-| `data/CounterDao.kt` | Atomic updates, uniqueness, affected-row results | P0 | [ ] |
-| `domain/CounterRepository.kt` | Validation, typed outcomes, concurrency contracts | P1 | [ ] |
+| `data/CounterDatabase.kt` | Remove destructive fallback; schema export/migrations | P0 | Implemented; schema export/build validation pending |
+| `data/CounterEntity.kt` | Count/name constraints and normalized unique key | P1 | Implemented; build validation pending |
+| `data/CounterDao.kt` | Atomic updates, uniqueness, affected-row results | P0 | Implemented; instrumentation execution pending |
+| `domain/CounterRepository.kt` | Validation, typed outcomes, concurrency contracts | P1 | Implemented; unit-test execution pending |
 | `notification/CounterActionReceiver.kt` | Bounded background execution and error handling | P0 | [ ] |
 | `notification/CounterNotificationManager.kt` | Notification lifecycle and PendingIntent identity | P0 | [ ] |
 | `MainActivity.kt` | Remove destructive notification cleanup; permission flow | P1 | [ ] |
-| `ui/CounterViewModel.kt` | State, error mapping, loading and selection | P1 | [ ] |
+| `ui/CounterViewModel.kt` | State, error mapping, loading and selection | P1 | Updated for typed repository outcomes; further Phase 4 work remains |
 | `ui/CounterScreen.kt` | Lifecycle state, callbacks, accessibility, UX | P2 | [ ] |
 | `ui/theme/Theme.kt`, `ui/theme/Type.kt` | Accessibility and visual consistency review | P3 | [ ] |
 | `res/values/strings.xml` | Move user-facing strings to resources | P2 | [ ] |
 | `app/proguard-rules.pro` | Validate rules against minified release | P2 | [ ] |
 | `.github/workflows/build.yml` | Wrapper, tag trigger, permissions, truthful status | P2 | [ ] |
-| `app/src/test/**` | Unit, DAO, repository, ViewModel and migration tests | P0/P1 | [ ] |
-| `app/src/androidTest/**` | Notification and Compose UI tests | P2 | [ ] |
+| `app/src/test/**` | Repository unit tests | P0 | Added; execution pending |
+| `app/src/androidTest/**` | Room migration and atomic DAO tests | P0 | Added; execution pending |
 
 ## Suggested commit sequence
 
