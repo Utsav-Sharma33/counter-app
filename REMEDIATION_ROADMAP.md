@@ -242,6 +242,13 @@ Acceptance:
 
 ### Phase 5 — Automated testing
 
+**Implementation status (2026-11-11):** Expanded repository regression coverage for name validation/normalization, duplicate handling, rename, increment/decrement boundaries and missing rows, set/reset/delete/delete-all, storage failures, and coroutine cancellation. Added Room instrumentation coverage for concurrent increments/decrements, integer bounds, timestamp invariants, unique normalized-name enforcement, and the repository's database-constraint race handling. Expanded ViewModel tests for delete-all cleanup, missing-counter notification tracking, error clearing, and create failures. JaCoCo 0.8.12 reporting is configured for debug JVM unit tests with generated Android/Kotlin classes excluded; debug unit-test and instrumentation coverage collection are enabled. **No Gradle build, unit tests, instrumentation tests, or coverage report has been executed. The 95% core domain/repository target is not yet measured or claimed.** CI workflows have not been run.
+
+**Local validation commands (when a Gradle 8.4 environment is available):**
+- JVM tests and report: `./gradlew :app:testDebugUnitTest :app:jacocoTestReport`
+- Connected Room/Compose/notification instrumentation tests and Android coverage: `./gradlew :app:createDebugCoverageReport`
+- HTML JVM coverage report: `app/build/reports/jacoco/jacocoTestReport/html/index.html`
+
 **Files:** `app/src/test/`, `app/src/androidTest/`, `app/build.gradle.kts`
 
 Tasks:
@@ -337,8 +344,8 @@ Acceptance:
 | `notification/CounterNotificationController.kt`, `AndroidCounterNotificationController.kt` | Inject notification behavior outside ViewModel | P1 | Implemented |
 | `app/proguard-rules.pro` | Validate rules against minified release | P2 | [ ] |
 | `.github/workflows/build.yml` | Wrapper, tag trigger, permissions, truthful status | P2 | [ ] |
-| `app/src/test/**` | Repository and ViewModel unit tests | P0 | Added; execution pending |
-| `app/src/androidTest/**` | Room migration, atomic DAO and Compose workflow tests | P0 | Added; execution pending |
+| `app/src/test/**` | Repository and ViewModel unit tests | P0 | Expanded in Phase 5; execution and coverage measurement pending |
+| `app/src/androidTest/**` | Room migration, atomic DAO, uniqueness, and Compose workflow tests | P0 | Expanded in Phase 5; execution pending |
 
 ## Suggested commit sequence
 
